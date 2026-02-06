@@ -24,20 +24,13 @@ if "user" not in st.session_state:
 
 # --- HEATMAP GENERATOR ---
 def generate_heatmap(original_img_bytes, ela_img):
-    # Convert original bytes to OpenCV format
     nparr = np.frombuffer(original_img_bytes, np.uint8)
     original = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     original = cv2.cvtColor(original, cv2.COLOR_BGR2RGB)
-    
-    # Convert ELA PIL image to OpenCV format
     ela_cv = np.array(ela_img.convert('RGB'))
     gray_ela = cv2.cvtColor(ela_cv, cv2.COLOR_RGB2GRAY)
-    
-    # Create Heatmap
     heatmap_color = cv2.applyColorMap(gray_ela, cv2.COLORMAP_JET)
     heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
-    
-    # Overlay (60% Original, 40% Heatmap)
     overlay = cv2.addWeighted(original, 0.6, heatmap_color, 0.4, 0)
     return overlay
 
@@ -46,12 +39,9 @@ def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, recovery TEXT)')
-    
-    # Auto-repair schema if missing column
     c.execute("PRAGMA table_info(users)")
     if 'recovery' not in [col[1] for col in c.fetchall()]:
         c.execute('ALTER TABLE users ADD COLUMN recovery TEXT')
-        
     c.execute("SELECT * FROM users WHERE username='sanskar'")
     if not c.fetchone():
         hp = hashlib.sha256("detective2026".encode()).hexdigest()
@@ -138,7 +128,7 @@ if not st.session_state["logged_in"]:
                 elif add_user(nu, npw, rec): st.success("Registered. Use Login.")
                 else: st.error("ID already exists")
         with t3:
-            st.markdown("### 🔑 KEY RECOVERY")
+            st.markdown("### 🔑 KEY RECOVERY PROTOCOL")
             fu = st.text_input("TARGET AGENT ID", key="f_u")
             frec = st.text_input("SECRET WORD", type="password", key="f_rec")
             fnpw = st.text_input("NEW ACCESS KEY", type="password", key="f_npw")
@@ -171,22 +161,18 @@ else:
     files = st.file_uploader("SUBMIT DIGITAL EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
 
     if files:
-        # If single file, show the advanced 3-column forensic view
         if len(files) == 1:
             file = files[0]
             col1, col2, col3 = st.columns(3)
-            
             with col1:
                 st.markdown('<div class="evidence-card"><h4>SOURCE</h4>', unsafe_allow_html=True)
                 st.image(file, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
-                
             with col2:
                 st.markdown('<div class="evidence-card"><h4>ELA MAP</h4>', unsafe_allow_html=True)
                 ela_img = convert_to_ela_image(file, quality=90)
                 st.image(ela_img, use_container_width=True)
                 st.markdown('</div>', unsafe_allow_html=True)
-                
             with col3:
                 st.markdown('<div class="evidence-card"><h4>HEATMAP</h4>', unsafe_allow_html=True)
                 heatmap_res = generate_heatmap(file.getvalue(), ela_img)
@@ -195,24 +181,48 @@ else:
 
         if st.button("INITIATE DEEP SCAN INTERROGATION"):
             results = []
-            bar = st.progress(0)
-            with st.status("📡 ANALYZING DATASTREAMS...", expanded=True) as status:
-                for idx, f in enumerate(files):
-                    tmp = f"temp_{f.name}"
-                    with open(tmp, "wb") as buffer: buffer.write(f.getbuffer())
+            zip_buffer = io.BytesIO()
+            
+            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+                progress_bar = st.progress(0)
+                with st.status("📡 ANALYZING SCENE...", expanded=True) as status:
+                    for idx, f in enumerate(files):
+                        tmp = f"temp_{f.name}"
+                        with open(tmp, "wb") as buffer: buffer.write(f.getbuffer())
+                        
+                        meta_data, meta_msg = scan_metadata(tmp)
+                        proc = prepare_image_for_cnn(tmp)
+                        pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
+                        
+                        # Asset Generation for ZIP
+                        ela_asset = convert_to_ela_image(f, quality=90)
+                        heatmap_asset = generate_heatmap(f.getvalue(), ela_asset)
+                        
+                        # Add files to ZIP
+                        zip_file.writestr(f"Source_{f.name}", f.getvalue())
+                        
+                        ela_io = io.BytesIO()
+                        ela_asset.save(ela_io, format="PNG")
+                        zip_file.writestr(f"ELA_{f.name}.png", ela_io.getvalue())
+                        
+                        heat_io = io.BytesIO()
+                        Image.fromarray(heatmap_asset).save(heat_io, format="PNG")
+                        zip_file.writestr(f"Heatmap_{f.name}.png", heat_io.getvalue())
+                        
+                        os.remove(tmp)
+                        
+                        verdict = "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN"
+                        results.append({
+                            "FILENAME": f.name, "VERDICT": verdict, 
+                            "CONFIDENCE": float(max(pred, 1-pred)*100), "METADATA": meta_msg
+                        })
+                        progress_bar.progress((idx + 1) / len(files))
                     
-                    meta_data, meta_msg = scan_metadata(tmp)
-                    proc = prepare_image_for_cnn(tmp)
-                    pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
-                    os.remove(tmp)
+                    # Add PDF to ZIP
+                    pdf_data = create_pdf_report(results, case_notes=case_notes)
+                    zip_file.writestr(f"Forensic_Report_{case_id}.pdf", pdf_data)
                     
-                    verdict = "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN"
-                    results.append({
-                        "FILENAME": f.name, "VERDICT": verdict, 
-                        "CONFIDENCE": float(max(pred, 1-pred)*100), "METADATA": meta_msg
-                    })
-                    bar.progress((idx + 1) / len(files))
-                status.update(label="SCAN COMPLETE", state="complete")
+                    status.update(label="SCAN COMPLETE", state="complete")
 
             st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
             df = pd.DataFrame(results)
@@ -222,6 +232,10 @@ else:
             c1.metric("SCANNED", len(results))
             c2.metric("FLAGGED", len(df[df['VERDICT'] == "🚩 FORGERY"]))
             with c3:
-                pdf_bytes = create_pdf_report(results, case_notes=case_notes)
-                st.download_button("📥 EXPORT DOSSIER", pdf_bytes, f"REPORT_{case_id}.pdf")
+                st.download_button(
+                    label="📥 EXPORT TACTICAL BUNDLE (.ZIP)",
+                    data=zip_buffer.getvalue(),
+                    file_name=f"CASE_{case_id}_BUNDLE.zip",
+                    mime="application/zip"
+                )
             st.markdown('</div>', unsafe_allow_html=True)
