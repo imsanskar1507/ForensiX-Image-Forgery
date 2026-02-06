@@ -1,6 +1,7 @@
 streamlit
-tensorflow-cpu
+tensorflow
 numpy
 pandas
-Pillow
+pillow
 fpdf
+opencv-python-headless
