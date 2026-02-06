@@ -8,20 +8,76 @@ from metadata_scanner import scan_metadata
 from tensorflow.keras.models import load_model
 from report_gen import create_pdf_report 
 
-st.set_page_config(page_title="ForensiX | Detective Suite", layout="wide", page_icon="🕵️")
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="ForensiX | Tactical Suite", layout="wide", page_icon="🕵️")
 
-# Custom UI
+# --- CYBER-FORENSICS CSS ---
 st.markdown("""
     <style>
-    .stApp { background: radial-gradient(circle, #1a1c23 0%, #0d0e12 100%); color: #e0e0e0; font-family: 'Courier New', Courier, monospace; }
-    .evidence-card { background: rgba(25, 28, 35, 0.8); border: 1px solid rgba(139, 0, 0, 0.3); border-left: 5px solid #8b0000; border-radius: 8px; padding: 20px; margin-bottom: 20px; backdrop-filter: blur(10px); }
-    h1 { color: #f0f6fc; text-shadow: 0px 0px 10px rgba(139, 0, 0, 0.7); letter-spacing: 4px; border-bottom: 1px solid #8b0000; }
-    .status-text { color: #8b0000; font-weight: bold; animation: blinker 1.5s linear infinite; }
-    @keyframes blinker { 50% { opacity: 0; } }
-    .stButton>button { width: 100%; background: linear-gradient(145deg, #8b0000, #5a0000); color: white; border-radius: 4px; height: 3.5rem; font-weight: 900; }
+    /* Dark Terminal Background */
+    .stApp {
+        background-color: #0a0b0d;
+        color: #00f2ff;
+        font-family: 'Courier New', Courier, monospace;
+    }
+
+    /* Glowing Neon Card */
+    .evidence-card {
+        background: #0f1116;
+        border: 2px solid #00f2ff;
+        box-shadow: 0px 0px 15px #00f2ff;
+        border-radius: 10px;
+        padding: 25px;
+        margin-bottom: 25px;
+    }
+
+    /* Neon Headers */
+    h1, h2, h3 {
+        color: #00f2ff !important;
+        text-transform: uppercase;
+        letter-spacing: 3px;
+        text-shadow: 0px 0px 10px #00f2ff;
+    }
+
+    /* Red Alert Text for Forgery */
+    .status-alert {
+        color: #ff003c;
+        font-weight: bold;
+        text-shadow: 0px 0px 5px #ff003c;
+    }
+
+    /* Tactical Sidebar */
+    [data-testid="stSidebar"] {
+        background-color: #050607;
+        border-right: 1px solid #00f2ff;
+    }
+
+    /* Cyan Cyber Button */
+    .stButton>button {
+        width: 100%;
+        background-color: transparent;
+        color: #00f2ff;
+        border: 2px solid #00f2ff;
+        border-radius: 0px;
+        height: 3.5rem;
+        font-weight: bold;
+        text-transform: uppercase;
+        transition: 0.3s;
+    }
+    .stButton>button:hover {
+        background-color: #00f2ff;
+        color: #000;
+        box-shadow: 0px 0px 20px #00f2ff;
+    }
+
+    /* Data Table Styling */
+    .stDataFrame {
+        border: 1px solid #00f2ff;
+    }
     </style>
     """, unsafe_allow_html=True)
 
+# --- MODEL LOADING ---
 @st.cache_resource
 def get_model():
     base_path = os.path.dirname(__file__)
@@ -30,22 +86,38 @@ def get_model():
 
 model = get_model()
 
+# --- SIDEBAR ---
 with st.sidebar:
-    st.markdown("### 🕵️ CASE DOSSIER")
-    case_ref = st.text_input("CASE ID", value="REF-9921-X")
-    investigator = st.text_input("AGENT", value="Sanskar Dhore")
-    case_notes = st.text_area("INVESTIGATOR NOTES", placeholder="Enter manual summary...", height=150)
+    st.markdown("### 🖥️ SYSTEM CONFIG")
+    case_id = st.text_input("CASE ID", value="EXBT-ALPHA-01")
+    agent = st.text_input("INVESTIGATOR", value="Sanskar Dhore")
+    st.markdown("---")
+    case_notes = st.text_area("CASE CONCLUSION", placeholder="Enter final summary...", height=200)
 
-st.markdown("<h1>📁 FORENSIC INTERROGATION SUITE</h1>", unsafe_allow_html=True)
-st.markdown(f"<p class='status-text'>SYSTEM STATUS: ACTIVE // AGENT: {investigator.upper()}</p>", unsafe_allow_html=True)
+# --- MAIN DASHBOARD ---
+st.markdown("<h1>🛰️ FORENSIX: TACTICAL SCANNER</h1>", unsafe_allow_html=True)
+st.markdown(f"<p style='color:#00f2ff;'>ACTIVE SESSION // AGENT_{agent.upper().replace(' ', '_')}</p>", unsafe_allow_html=True)
 
-uploaded_files = st.file_uploader("📥 SUBMIT EVIDENCE", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+uploaded_files = st.file_uploader("UPLOAD DIGITAL EVIDENCE", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
 if uploaded_files:
-    if st.button("⚡ BEGIN FORENSIC SCAN"):
+    if len(uploaded_files) == 1:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown('<div class="evidence-card"><h3>SOURCE_FILE</h3>', unsafe_allow_html=True)
+            st.image(uploaded_files[0], use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+        with c2:
+            st.markdown('<div class="evidence-card"><h3>ELA_ANALYSIS</h3>', unsafe_allow_html=True)
+            ela = convert_to_ela_image(uploaded_files[0], quality=90)
+            st.image(ela, use_container_width=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    if st.button("RUN DEEP_SCAN INTERROGATION"):
         results = []
-        progress_bar = st.progress(0)
-        with st.status("🕵️ ANALYZING SCENE...", expanded=True) as status:
+        progress = st.progress(0)
+        
+        with st.status("📡 INTERROGATING DATASTREAMS...", expanded=True) as status:
             for idx, file in enumerate(uploaded_files):
                 temp_path = f"temp_{file.name}"
                 with open(temp_path, "wb") as f: f.write(file.getbuffer())
@@ -56,14 +128,27 @@ if uploaded_files:
                 os.remove(temp_path)
                 
                 verdict = "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN"
-                results.append({"ID": f"EXBT-{idx+1001}", "FILENAME": file.name, "VERDICT": verdict, "CONFIDENCE": float(max(pred, 1-pred)*100), "METADATA": meta_msg})
-                progress_bar.progress((idx + 1) / len(uploaded_files))
+                results.append({
+                    "ID": f"EXBT-{idx+1001}", 
+                    "FILENAME": file.name, 
+                    "VERDICT": verdict, 
+                    "CONFIDENCE": float(max(pred, 1-pred)*100), 
+                    "METADATA": meta_msg
+                })
+                progress.progress((idx + 1) / len(uploaded_files))
             status.update(label="SCAN COMPLETE", state="complete")
 
+        # --- LOG DISPLAY ---
         st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
+        st.markdown("### 📋 INVESTIGATION DATABASE")
         df = pd.DataFrame(results)
-        st.dataframe(df, use_container_width=True, height=300, hide_index=True, column_config={"CONFIDENCE": st.column_config.ProgressColumn("Confidence", format="%.1f%%", min_value=0, max_value=100)})
+        st.dataframe(df, use_container_width=True, height=350, hide_index=True)
         
-        pdf_bytes = create_pdf_report(results, case_notes=case_notes)
-        st.download_button("📥 DOWNLOAD OFFICIAL DOSSIER", pdf_bytes, f"{case_ref}_Report.pdf", "application/pdf")
+        m1, m2, m3 = st.columns(3)
+        m1.metric("TOTAL SCANNED", len(results))
+        m2.metric("FLAGGED", len(df[df['VERDICT'] == "🚩 FORGERY"]))
+        
+        with m3:
+            pdf_bytes = create_pdf_report(results, case_notes=case_notes)
+            st.download_button("📥 EXPORT DOSSIER", pdf_bytes, f"REPORT_{case_id}.pdf", "application/pdf")
         st.markdown('</div>', unsafe_allow_html=True)
