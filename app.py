@@ -24,21 +24,26 @@ if "user" not in st.session_state:
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT)')
-    # Default admin account
+    # Added 'recovery' column to store hashed secret word
+    c.execute('''CREATE TABLE IF NOT EXISTS users 
+                 (username TEXT PRIMARY KEY, password TEXT, recovery TEXT)''')
+    
+    # Default admin account with a default recovery word 'nagpur'
     c.execute("SELECT * FROM users WHERE username='sanskar'")
     if not c.fetchone():
         hashed_pw = hashlib.sha256("detective2026".encode()).hexdigest()
-        c.execute("INSERT INTO users VALUES (?, ?)", ("sanskar", hashed_pw))
+        hashed_rec = hashlib.sha256("nagpur".encode()).hexdigest()
+        c.execute("INSERT INTO users VALUES (?, ?, ?)", ("sanskar", hashed_pw, hashed_rec))
     conn.commit()
     conn.close()
 
-def add_user(username, password):
+def add_user(username, password, recovery):
     try:
         conn = sqlite3.connect('users.db')
         c = conn.cursor()
         hashed_pw = hashlib.sha256(password.encode()).hexdigest()
-        c.execute("INSERT INTO users VALUES (?, ?)", (username.lower().strip(), hashed_pw))
+        hashed_rec = hashlib.sha256(recovery.lower().strip().encode()).hexdigest()
+        c.execute("INSERT INTO users VALUES (?, ?, ?)", (username.lower().strip(), hashed_pw, hashed_rec))
         conn.commit()
         conn.close()
         return True
@@ -53,6 +58,22 @@ def check_user(username, password):
     result = c.fetchone()
     conn.close()
     return result
+
+def reset_password(username, recovery_word, new_password):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    hashed_rec = hashlib.sha256(recovery_word.lower().strip().encode()).hexdigest()
+    
+    # Verify if username and recovery word match
+    c.execute("SELECT * FROM users WHERE username=? AND recovery=?", (username.lower().strip(), hashed_rec))
+    if c.fetchone():
+        new_hashed_pw = hashlib.sha256(new_password.encode()).hexdigest()
+        c.execute("UPDATE users SET password=? WHERE username=?", (new_hashed_pw, username.lower().strip()))
+        conn.commit()
+        conn.close()
+        return True
+    conn.close()
+    return False
 
 init_db()
 
@@ -87,7 +108,8 @@ if not st.session_state["logged_in"]:
     with col2:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
         st.markdown("<h2 style='text-align:center;'>🔒 PORTAL ACCESS</h2>", unsafe_allow_html=True)
-        t1, t2 = st.tabs(["LOGIN", "REGISTER"])
+        # Added a third tab for Recovery
+        t1, t2, t3 = st.tabs(["LOGIN", "REGISTER", "FORGOT KEY"])
         
         with t1:
             u = st.text_input("AGENT ID", key="l_u")
@@ -105,10 +127,35 @@ if not st.session_state["logged_in"]:
         with t2:
             nu = st.text_input("NEW AGENT ID", key="r_u")
             npw = st.text_input("SET ACCESS KEY", type="password", key="r_p")
+            ncpw = st.text_input("CONFIRM ACCESS KEY", type="password", key="r_cp")
+            nrec = st.text_input("SECRET RECOVERY WORD", help="This is used to reset your password if forgotten", key="r_rec")
+            
             if st.button("CREATE ACCOUNT"):
-                if len(npw) < 6: st.error("Key too short")
-                elif add_user(nu, npw): st.success("Account Created. Switch to Login tab.")
-                else: st.error("ID already exists")
+                if not nu or not npw or not nrec:
+                    st.error("All fields are required")
+                elif npw != ncpw:
+                    st.error("Passwords do not match")
+                elif len(npw) < 6: 
+                    st.error("Key too short (Min 6 chars)")
+                elif add_user(nu, npw, nrec): 
+                    st.success("Account Created. Switch to Login tab.")
+                else: 
+                    st.error("ID already exists")
+
+        with t3:
+            st.markdown("### 🔑 KEY RECOVERY")
+            fu = st.text_input("TARGET AGENT ID", key="f_u")
+            frec = st.text_input("YOUR SECRET WORD", type="password", key="f_rec")
+            fnpw = st.text_input("NEW ACCESS KEY", type="password", key="f_npw")
+            
+            if st.button("RESET ACCESS PROTOCOL"):
+                if not fu or not frec or not fnpw:
+                    st.error("Please fill all recovery fields")
+                elif reset_password(fu, frec, fnpw):
+                    st.success("PROTOCOL SUCCESS: Access Key updated.")
+                else:
+                    st.error("VERIFICATION FAILED: ID or Secret Word is incorrect.")
+                    
         st.markdown('</div>', unsafe_allow_html=True)
 
 else:
@@ -122,7 +169,6 @@ else:
     model = get_model()
 
     with st.sidebar:
-        # FIXED: Use .get to avoid KeyError
         current_agent = st.session_state.get('user', 'Agent')
         st.markdown(f"### ⚡ ACTIVE: {current_agent.upper()}")
         if st.button("EXIT SYSTEM"):
@@ -138,34 +184,37 @@ else:
 
     if files:
         if st.button("INITIATE INTERROGATION"):
-            results = []
-            bar = st.progress(0)
-            with st.status("📡 SCANNING...") as status:
-                for idx, f in enumerate(files):
-                    tmp = f"temp_{f.name}"
-                    with open(tmp, "wb") as buffer: buffer.write(f.getbuffer())
-                    
-                    meta_data, meta_msg = scan_metadata(tmp)
-                    proc = prepare_image_for_cnn(tmp)
-                    pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
-                    os.remove(tmp)
-                    
-                    verdict = "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN"
-                    results.append({
-                        "FILENAME": f.name, "VERDICT": verdict, 
-                        "CONFIDENCE": float(max(pred, 1-pred)*100), "METADATA": meta_msg
-                    })
-                    bar.progress((idx + 1) / len(files))
-                status.update(label="SCAN COMPLETE", state="complete")
+            if model is None:
+                st.error("Forensic Engine (Model) not loaded correctly.")
+            else:
+                results = []
+                bar = st.progress(0)
+                with st.status("📡 SCANNING...") as status:
+                    for idx, f in enumerate(files):
+                        tmp = f"temp_{f.name}"
+                        with open(tmp, "wb") as buffer: buffer.write(f.getbuffer())
+                        
+                        meta_data, meta_msg = scan_metadata(tmp)
+                        proc = prepare_image_for_cnn(tmp)
+                        pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
+                        os.remove(tmp)
+                        
+                        verdict = "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN"
+                        results.append({
+                            "FILENAME": f.name, "VERDICT": verdict, 
+                            "CONFIDENCE": float(max(pred, 1-pred)*100), "METADATA": meta_msg
+                        })
+                        bar.progress((idx + 1) / len(files))
+                    status.update(label="SCAN COMPLETE", state="complete")
 
-            st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
-            df = pd.DataFrame(results)
-            st.dataframe(df, use_container_width=True, hide_index=True)
-            
-            c1, c2, c3 = st.columns(3)
-            c1.metric("SCANNED", len(results))
-            c2.metric("FLAGGED", len(df[df['VERDICT'] == "🚩 FORGERY"]))
-            with c3:
-                pdf = create_pdf_report(results, case_notes=case_notes)
-                st.download_button("📥 DOWNLOAD DOSSIER", pdf, f"{case_id}.pdf")
-            st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
+                df = pd.DataFrame(results)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+                
+                c1, c2, c3 = st.columns(3)
+                c1.metric("SCANNED", len(results))
+                c2.metric("FLAGGED", len(df[df['VERDICT'] == "🚩 FORGERY"]))
+                with c3:
+                    pdf = create_pdf_report(results, case_notes=case_notes)
+                    st.download_button("📥 DOWNLOAD DOSSIER", pdf, f"{case_id}.pdf")
+                st.markdown('</div>', unsafe_allow_html=True)
