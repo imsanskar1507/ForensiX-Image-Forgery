@@ -17,7 +17,6 @@ from report_gen import create_pdf_report
 # --- INITIAL CONFIG ---
 st.set_page_config(page_title="ForensiX-Image Forgery Detector", layout="wide", page_icon="🕵️")
 
-# Initialize Session State
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "user" not in st.session_state:
@@ -34,7 +33,7 @@ def generate_heatmap(original_img_bytes, ela_img):
     heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
     return cv2.addWeighted(original, 0.6, heatmap_color, 0.4, 0)
 
-# --- DATABASE ENGINE ---
+# --- DATABASE LOGIC ---
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
@@ -42,7 +41,6 @@ def init_db():
     c.execute("PRAGMA table_info(users)")
     if 'recovery' not in [col[1] for col in c.fetchall()]:
         c.execute('ALTER TABLE users ADD COLUMN recovery TEXT')
-    # Default Admin: Sanskar
     c.execute("SELECT * FROM users WHERE username='sanskar'")
     if not c.fetchone():
         hp = hashlib.sha256("detective2026".encode()).hexdigest()
@@ -102,46 +100,37 @@ def reset_password(u, r, npw):
 
 init_db()
 
-# --- REFINED GLASSMORPHISM CSS ---
-st.markdown("""
-    <style>
-    .stApp {
-        background: linear-gradient(rgba(10, 11, 13, 0.8), rgba(10, 11, 13, 0.9)), 
-                    url("https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop");
-        background-size: cover;
-        background-attachment: fixed;
-        color: #00f2ff;
-        font-family: 'Courier New', Courier, monospace;
-    }
-    .login-box, .evidence-card {
-        background: rgba(15, 17, 22, 0.75) !important;
-        backdrop-filter: blur(15px);
-        border: 2px solid #00f2ff;
-        border-radius: 15px;
-        padding: 25px;
-        margin-bottom: 25px;
-        box-shadow: 0px 0px 30px rgba(0, 242, 255, 0.2);
-    }
-    h1, h2, h3, h4 { 
-        color: #00f2ff !important; 
-        text-shadow: 0px 0px 15px rgba(0, 242, 255, 0.8); 
-        text-transform: uppercase;
-        letter-spacing: 2px;
-    }
-    .stButton>button {
-        width: 100%; background: transparent; color: #00f2ff;
-        border: 2px solid #00f2ff; font-weight: bold; border-radius: 5px;
-    }
-    .stButton>button:hover {
-        background: #00f2ff; color: #000; box-shadow: 0px 0px 25px #00f2ff;
-    }
-    input {
-        background-color: rgba(0, 0, 0, 0.5) !important;
-        color: #00f2ff !important;
-        border: 1px solid #00f2ff !important;
-    }
-    </style>
-    """, unsafe_allow_html=True)
+# --- DYNAMIC CSS ENGINE ---
+if not st.session_state["logged_in"]:
+    st.markdown("""
+        <style>
+        .stApp {
+            background: linear-gradient(rgba(10, 11, 13, 0.85), rgba(10, 11, 13, 0.95)), 
+                        url("https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop");
+            background-size: cover; background-attachment: fixed; color: #00f2ff;
+        }
+        .login-box {
+            background: rgba(15, 17, 22, 0.75) !important; backdrop-filter: blur(15px);
+            border: 2px solid #00f2ff; border-radius: 15px; padding: 25px; box-shadow: 0px 0px 30px rgba(0, 242, 255, 0.2);
+        }
+        h1, h2 { color: #00f2ff !important; text-shadow: 0px 0px 15px rgba(0, 242, 255, 0.8); }
+        .stButton>button { background: transparent; color: #00f2ff; border: 2px solid #00f2ff; }
+        .stButton>button:hover { background: #00f2ff; color: #000; box-shadow: 0px 0px 25px #00f2ff; }
+        input { background-color: rgba(0, 0, 0, 0.5) !important; color: #00f2ff !important; border: 1px solid #00f2ff !important; }
+        </style>
+        """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+        <style>
+        .stApp { background-color: #0a0b0d; color: #00f2ff; font-family: 'Courier New', Courier, monospace; }
+        .evidence-card {
+            background: #0f1116; border: 1px solid #00f2ff; border-radius: 12px;
+            padding: 20px; margin-bottom: 20px; box-shadow: 0px 0px 15px rgba(0, 242, 255, 0.1);
+        }
+        h1, h3, h4 { color: #00f2ff !important; text-shadow: 0px 0px 8px rgba(0, 242, 255, 0.5); }
+        section[data-testid="stSidebar"] { background-color: #0f1116 !important; border-right: 1px solid #00f2ff; }
+        </style>
+        """, unsafe_allow_html=True)
 
 # --- APP FLOW ---
 if not st.session_state["logged_in"]:
@@ -190,7 +179,6 @@ else:
 
     st.markdown("<h1>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
     
-    # Tab Logic
     if st.session_state["user"].lower() == "sanskar":
         tab_main, tab_admin = st.tabs(["🔍 INVESTIGATION", "📊 ADMIN CONSOLE"])
     else: tab_main, tab_admin = st.container(), None
