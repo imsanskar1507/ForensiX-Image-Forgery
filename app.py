@@ -33,7 +33,7 @@ def generate_heatmap(original_img_bytes, ela_img):
     heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
     return cv2.addWeighted(original, 0.6, heatmap_color, 0.4, 0)
 
-# --- DATABASE LOGIC ---
+# --- DATABASE ENGINE ---
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
@@ -100,7 +100,7 @@ def reset_password(u, r, npw):
 
 init_db()
 
-# --- DYNAMIC CSS ENGINE ---
+# --- DYNAMIC STYLING ---
 if not st.session_state["logged_in"]:
     st.markdown("""
         <style>
@@ -111,24 +111,23 @@ if not st.session_state["logged_in"]:
         }
         .login-box {
             background: rgba(15, 17, 22, 0.75) !important; backdrop-filter: blur(15px);
-            border: 2px solid #00f2ff; border-radius: 15px; padding: 25px; box-shadow: 0px 0px 30px rgba(0, 242, 255, 0.2);
+            border: 2px solid #00f2ff; border-radius: 15px; padding: 30px; 
+            box-shadow: 0px 0px 30px rgba(0, 242, 255, 0.2);
         }
-        h1, h2 { color: #00f2ff !important; text-shadow: 0px 0px 15px rgba(0, 242, 255, 0.8); }
-        .stButton>button { background: transparent; color: #00f2ff; border: 2px solid #00f2ff; }
-        .stButton>button:hover { background: #00f2ff; color: #000; box-shadow: 0px 0px 25px #00f2ff; }
-        input { background-color: rgba(0, 0, 0, 0.5) !important; color: #00f2ff !important; border: 1px solid #00f2ff !important; }
         </style>
         """, unsafe_allow_html=True)
 else:
     st.markdown("""
         <style>
-        .stApp { background-color: #0a0b0d; color: #00f2ff; font-family: 'Courier New', Courier, monospace; }
-        .evidence-card {
-            background: #0f1116; border: 1px solid #00f2ff; border-radius: 12px;
-            padding: 20px; margin-bottom: 20px; box-shadow: 0px 0px 15px rgba(0, 242, 255, 0.1);
+        .stApp { background-color: #0a0b0d; color: #00f2ff; font-family: 'Courier New', monospace; }
+        section[data-testid="stSidebar"] { 
+            background-color: #0f1116 !important; 
+            border-right: 2px solid #00f2ff !important; 
         }
-        h1, h3, h4 { color: #00f2ff !important; text-shadow: 0px 0px 8px rgba(0, 242, 255, 0.5); }
-        section[data-testid="stSidebar"] { background-color: #0f1116 !important; border-right: 1px solid #00f2ff; }
+        .evidence-card { 
+            background: rgba(15, 17, 22, 0.8); border: 1px solid #00f2ff; 
+            border-radius: 12px; padding: 20px; margin-bottom: 20px;
+        }
         </style>
         """, unsafe_allow_html=True)
 
@@ -151,12 +150,11 @@ if not st.session_state["logged_in"]:
             nu, npw, ncpw, rec = st.text_input("NEW ID"), st.text_input("KEY", type="password"), st.text_input("CONFIRM", type="password"), st.text_input("RECOVERY WORD")
             if st.button("CREATE ACCOUNT"):
                 if npw != ncpw: st.error("Keys mismatch")
-                elif len(npw) < 6: st.error("Key too short")
                 elif add_user(nu, npw, rec): st.success("Created. Proceed to Login.")
                 else: st.error("ID exists")
         with t3:
             fu, frec, fnpw = st.text_input("ID", key="f_u"), st.text_input("SECRET", type="password"), st.text_input("NEW KEY", type="password")
-            if st.button("RESET"):
+            if st.button("RESET ACCESS"):
                 if reset_password(fu, frec, fnpw): st.success("Updated.")
                 else: st.error("Failed")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -164,18 +162,29 @@ if not st.session_state["logged_in"]:
 else:
     @st.cache_resource
     def get_model():
-        bp = os.path.dirname(__file__)
-        mp = os.path.join(bp, 'forgery_detector.h5')
+        mp = os.path.join(os.path.dirname(__file__), 'forgery_detector.h5')
         return load_model(mp) if os.path.exists(mp) else None
     
     model = get_model()
 
+    # --- MANAGED SIDEBAR ---
     with st.sidebar:
-        agent = st.session_state.get('user', 'Agent')
-        st.markdown(f"### ⚡ ACTIVE: {agent.upper()}")
-        if st.button("EXIT"): st.session_state["logged_in"] = False; st.rerun()
+        st.markdown(f"""
+            <div style="background: rgba(0, 242, 255, 0.05); padding: 20px; border-radius: 10px; border: 1px solid #00f2ff; margin-bottom: 25px;">
+                <h4 style="margin:0; font-size: 14px; opacity: 0.8;">OPERATIVE STATUS</h4>
+                <h2 style="margin:0; color: #00f2ff; font-size: 22px;">⚡ {st.session_state['user'].upper()}</h2>
+                <p style="margin:5px 0 0 0; font-size: 10px; color: #00f2ff;">LOCATION: NAGPUR_MS_IN</p>
+            </div>
+        """, unsafe_allow_html=True)
+        st.markdown("### 📂 CASE MANAGEMENT")
         case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
-        case_notes = st.text_area("INVESTIGATOR NOTES", height=150)
+        st.markdown("---")
+        st.markdown("### 📝 INVESTIGATION LOG")
+        case_notes = st.text_area("FIELD NOTES", height=200)
+        st.markdown("<br>"*3, unsafe_allow_html=True)
+        if st.button("🔴 EXIT SYSTEM"):
+            st.session_state["logged_in"] = False
+            st.rerun()
 
     st.markdown("<h1>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
     
@@ -230,7 +239,7 @@ else:
                 st.dataframe(df, use_container_width=True, hide_index=True)
                 c1, c2, c3 = st.columns(3)
                 c1.metric("SCANNED", len(results)); c2.metric("FLAGGED", len(df[df['VERDICT'] == "🚩 FORGERY"]))
-                with c3: st.download_button("📥 EXPORT BUNDLE (.ZIP)", zip_buffer.getvalue(), f"CASE_{case_id}.zip")
+                with c3: st.download_button("📥 EXPORT TACTICAL BUNDLE (.ZIP)", zip_buffer.getvalue(), f"CASE_{case_id}.zip")
                 st.markdown('</div>', unsafe_allow_html=True)
 
     if tab_admin:
