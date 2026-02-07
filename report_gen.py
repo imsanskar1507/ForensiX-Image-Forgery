@@ -4,6 +4,7 @@ import re
 
 class ForensicReport(FPDF):
     def header(self):
+        # Professional Tactical Header
         self.set_fill_color(10, 11, 13) 
         self.rect(0, 0, 210, 40, 'F')
         self.set_font('Courier', 'B', 18)
@@ -12,6 +13,7 @@ class ForensicReport(FPDF):
         self.ln(10)
 
 def clean_text(text):
+    """Ensures text is compatible with PDF encoding by stripping non-standard characters."""
     if not text: return ""
     text = re.sub(r'[^\x20-\x7E]+', ' ', str(text)) 
     return text.encode('latin-1', 'ignore').decode('latin-1')
@@ -37,6 +39,7 @@ def create_pdf_report(results_list, case_notes=""):
         pdf.ln(5)
         pdf.set_font("Courier", 'B', 12)
         pdf.cell(0, 8, txt=f"EXHIBIT: {clean_text(res['FILENAME'])}", ln=True)
+        # Remove Emojis for PDF stability
         v_clean = res['VERDICT'].replace("🚩 ", "").replace("🏳️ ", "")
         pdf.set_font("Courier", size=10)
         pdf.cell(0, 6, txt=f"VERDICT: {v_clean} | AI CONFIDENCE: {res['CONFIDENCE']:.2f}%", ln=True)
