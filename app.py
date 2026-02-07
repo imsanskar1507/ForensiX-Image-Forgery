@@ -22,7 +22,7 @@ if "logged_in" not in st.session_state:
 if "user" not in st.session_state:
     st.session_state["user"] = "Unknown"
 
-# --- HEATMAP GENERATOR ---
+# --- CORE UTILITIES ---
 def generate_heatmap(original_img_bytes, ela_img):
     nparr = np.frombuffer(original_img_bytes, np.uint8)
     original = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -49,6 +49,23 @@ def init_db():
         c.execute("INSERT INTO users VALUES (?, ?, ?)", ("sanskar", hp, hr))
     conn.commit()
     conn.close()
+
+def get_all_users():
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute("SELECT username FROM users")
+    users = c.fetchall()
+    conn.close()
+    return users
+
+def delete_user(username):
+    if username.lower() == "sanskar": return False
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    c.execute("DELETE FROM users WHERE username=?", (username,))
+    conn.commit()
+    conn.close()
+    return True
 
 def add_user(u, p, r):
     try:
@@ -87,16 +104,15 @@ def reset_password(u, r, npw):
 
 init_db()
 
-# --- CSS ---
+# --- STYLING ---
 st.markdown("""
     <style>
     .stApp { background-color: #0a0b0d; color: #00f2ff; font-family: 'Courier New', Courier, monospace; }
-    .login-box { max-width: 450px; margin: auto; padding: 40px; background: #0f1116; border: 2px solid #00f2ff; box-shadow: 0px 0px 25px rgba(0, 242, 255, 0.2); border-radius: 10px; }
-    .evidence-card { background: #0f1116; border: 1px solid #00f2ff; border-radius: 8px; padding: 15px; margin-bottom: 20px; text-align: center; }
-    h1, h2, h3, h4 { color: #00f2ff !important; text-shadow: 0px 0px 8px #00f2ff; text-transform: uppercase; }
+    .login-box { max-width: 450px; margin: auto; padding: 40px; background: #0f1116; border: 2px solid #00f2ff; border-radius: 10px; }
+    .evidence-card { background: #0f1116; border: 1px solid #00f2ff; border-radius: 8px; padding: 15px; margin-bottom: 20px; }
+    h1, h2, h3, h4 { color: #00f2ff !important; text-shadow: 0px 0px 8px #00f2ff; }
     .stButton>button { width: 100%; background: transparent; color: #00f2ff; border: 2px solid #00f2ff; font-weight: bold; }
     .stButton>button:hover { background: #00f2ff; color: black; box-shadow: 0px 0px 20px #00f2ff; }
-    input { background-color: #050607 !important; color: #00f2ff !important; border: 1px solid #00f2ff !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -128,7 +144,7 @@ if not st.session_state["logged_in"]:
                 elif add_user(nu, npw, rec): st.success("Registered. Use Login.")
                 else: st.error("ID already exists")
         with t3:
-            st.markdown("### 🔑 KEY RECOVERY PROTOCOL")
+            st.markdown("### 🔑 KEY RECOVERY")
             fu = st.text_input("TARGET AGENT ID", key="f_u")
             frec = st.text_input("SECRET WORD", type="password", key="f_rec")
             fnpw = st.text_input("NEW ACCESS KEY", type="password", key="f_npw")
@@ -158,84 +174,92 @@ else:
 
     st.markdown("<h1>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
     
-    files = st.file_uploader("SUBMIT DIGITAL EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
+    # --- ADMIN TAB CHECK ---
+    if st.session_state["user"].lower() == "sanskar":
+        tab_main, tab_admin = st.tabs(["🔍 INVESTIGATION", "📊 ADMIN CONSOLE"])
+    else:
+        tab_main = st.container()
+        tab_admin = None
 
-    if files:
-        if len(files) == 1:
-            file = files[0]
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.markdown('<div class="evidence-card"><h4>SOURCE</h4>', unsafe_allow_html=True)
-                st.image(file, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-            with col2:
-                st.markdown('<div class="evidence-card"><h4>ELA MAP</h4>', unsafe_allow_html=True)
-                ela_img = convert_to_ela_image(file, quality=90)
-                st.image(ela_img, use_container_width=True)
-                st.markdown('</div>', unsafe_allow_html=True)
-            with col3:
-                st.markdown('<div class="evidence-card"><h4>HEATMAP</h4>', unsafe_allow_html=True)
-                heatmap_res = generate_heatmap(file.getvalue(), ela_img)
-                st.image(heatmap_res, use_container_width=True)
+    with tab_main:
+        files = st.file_uploader("SUBMIT DIGITAL EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
+
+        if files:
+            # --- SIDE-BY-SIDE SECTION ---
+            st.markdown("### 🧬 FORENSIC SIDE-BY-SIDE")
+            for f in files:
+                ela_img = convert_to_ela_image(f, quality=90)
+                heatmap_img = generate_heatmap(f.getvalue(), ela_img)
+                
+                col_orig, col_comp = st.columns(2)
+                with col_orig:
+                    st.markdown('<div class="evidence-card"><h4>ORIGINAL SOURCE</h4>', unsafe_allow_html=True)
+                    st.image(f, use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+                with col_comp:
+                    st.markdown('<div class="evidence-card"><h4>TAMPER HEATMAP</h4>', unsafe_allow_html=True)
+                    st.image(heatmap_img, use_container_width=True)
+                    st.markdown('</div>', unsafe_allow_html=True)
+
+            if st.button("INITIATE DEEP SCAN INTERROGATION"):
+                results = []
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+                    progress_bar = st.progress(0)
+                    with st.status("📡 ANALYZING SCENE...", expanded=True) as status:
+                        for idx, f in enumerate(files):
+                            tmp = f"temp_{f.name}"
+                            with open(tmp, "wb") as buffer: buffer.write(f.getbuffer())
+                            
+                            meta_data, meta_msg = scan_metadata(tmp)
+                            proc = prepare_image_for_cnn(tmp)
+                            pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
+                            
+                            ela_asset = convert_to_ela_image(f, quality=90)
+                            heatmap_asset = generate_heatmap(f.getvalue(), ela_asset)
+                            
+                            zip_file.writestr(f"Source_{f.name}", f.getvalue())
+                            ela_io = io.BytesIO(); ela_asset.save(ela_io, format="PNG")
+                            zip_file.writestr(f"ELA_{f.name}.png", ela_io.getvalue())
+                            heat_io = io.BytesIO(); Image.fromarray(heatmap_asset).save(heat_io, format="PNG")
+                            zip_file.writestr(f"Heatmap_{f.name}.png", heat_io.getvalue())
+                            
+                            os.remove(tmp)
+                            verdict = "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN"
+                            results.append({"FILENAME": f.name, "VERDICT": verdict, "CONFIDENCE": float(max(pred, 1-pred)*100), "METADATA": meta_msg})
+                            progress_bar.progress((idx + 1) / len(files))
+                        
+                        pdf_data = create_pdf_report(results, case_notes=case_notes)
+                        zip_file.writestr(f"Forensic_Report_{case_id}.pdf", pdf_data)
+                        status.update(label="SCAN COMPLETE", state="complete")
+
+                st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
+                df = pd.DataFrame(results)
+                st.dataframe(df, use_container_width=True, hide_index=True)
+                c1, c2, c3 = st.columns(3)
+                c1.metric("SCANNED", len(results))
+                c2.metric("FLAGGED", len(df[df['VERDICT'] == "🚩 FORGERY"]))
+                with c3:
+                    st.download_button("📥 EXPORT TACTICAL BUNDLE (.ZIP)", zip_buffer.getvalue(), f"CASE_{case_id}.zip", "application/zip")
                 st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.button("INITIATE DEEP SCAN INTERROGATION"):
-            results = []
-            zip_buffer = io.BytesIO()
-            
-            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-                progress_bar = st.progress(0)
-                with st.status("📡 ANALYZING SCENE...", expanded=True) as status:
-                    for idx, f in enumerate(files):
-                        tmp = f"temp_{f.name}"
-                        with open(tmp, "wb") as buffer: buffer.write(f.getbuffer())
-                        
-                        meta_data, meta_msg = scan_metadata(tmp)
-                        proc = prepare_image_for_cnn(tmp)
-                        pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
-                        
-                        # Asset Generation for ZIP
-                        ela_asset = convert_to_ela_image(f, quality=90)
-                        heatmap_asset = generate_heatmap(f.getvalue(), ela_asset)
-                        
-                        # Add files to ZIP
-                        zip_file.writestr(f"Source_{f.name}", f.getvalue())
-                        
-                        ela_io = io.BytesIO()
-                        ela_asset.save(ela_io, format="PNG")
-                        zip_file.writestr(f"ELA_{f.name}.png", ela_io.getvalue())
-                        
-                        heat_io = io.BytesIO()
-                        Image.fromarray(heatmap_asset).save(heat_io, format="PNG")
-                        zip_file.writestr(f"Heatmap_{f.name}.png", heat_io.getvalue())
-                        
-                        os.remove(tmp)
-                        
-                        verdict = "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN"
-                        results.append({
-                            "FILENAME": f.name, "VERDICT": verdict, 
-                            "CONFIDENCE": float(max(pred, 1-pred)*100), "METADATA": meta_msg
-                        })
-                        progress_bar.progress((idx + 1) / len(files))
-                    
-                    # Add PDF to ZIP
-                    pdf_data = create_pdf_report(results, case_notes=case_notes)
-                    zip_file.writestr(f"Forensic_Report_{case_id}.pdf", pdf_data)
-                    
-                    status.update(label="SCAN COMPLETE", state="complete")
-
-            st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
-            df = pd.DataFrame(results)
-            st.dataframe(df, use_container_width=True, hide_index=True)
-            
-            c1, c2, c3 = st.columns(3)
-            c1.metric("SCANNED", len(results))
-            c2.metric("FLAGGED", len(df[df['VERDICT'] == "🚩 FORGERY"]))
-            with c3:
-                st.download_button(
-                    label="📥 EXPORT TACTICAL BUNDLE (.ZIP)",
-                    data=zip_buffer.getvalue(),
-                    file_name=f"CASE_{case_id}_BUNDLE.zip",
-                    mime="application/zip"
-                )
-            st.markdown('</div>', unsafe_allow_html=True)
+    if tab_admin:
+        with tab_admin:
+            st.markdown("### 🛠️ SYSTEM ADMINISTRATION")
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.markdown('<div class="evidence-card"><h4>REGISTERED AGENTS</h4>', unsafe_allow_html=True)
+                user_list = get_all_users()
+                for u_entry in user_list:
+                    u_name = u_entry[0]
+                    c_u1, c_u2 = st.columns([3, 1])
+                    c_u1.text(f"👤 {u_name.upper()}")
+                    if u_name != "sanskar":
+                        if c_u2.button("REVOKE", key=f"del_{u_name}"):
+                            if delete_user(u_name): st.rerun()
+                st.markdown('</div>', unsafe_allow_html=True)
+            with col_b:
+                st.markdown('<div class="evidence-card"><h4>METRICS</h4>', unsafe_allow_html=True)
+                st.metric("DATABASE STATUS", "ONLINE")
+                st.metric("TOTAL AGENTS", len(user_list))
+                st.markdown('</div>', unsafe_allow_html=True)
