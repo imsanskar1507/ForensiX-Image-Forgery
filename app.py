@@ -17,6 +17,7 @@ from report_gen import create_pdf_report
 # --- INITIAL CONFIG ---
 st.set_page_config(page_title="ForensiX-Image Forgery Detector", layout="wide", page_icon="🕵️")
 
+# Initialize Session States
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "user" not in st.session_state:
@@ -54,7 +55,9 @@ def get_all_users():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     c.execute("SELECT username FROM users")
-    return c.fetchall()
+    users = c.fetchall()
+    conn.close()
+    return users
 
 def delete_user(username):
     if username.lower() == "sanskar": return False
@@ -102,60 +105,73 @@ def reset_password(u, r, npw):
 
 init_db()
 
-# --- PROFESSIONAL THEME CSS ---
+# --- THEMED CSS (Neon Data Grid) ---
 st.markdown("""
     <style>
     /* Background Image with Dark Overlay */
     .stApp {
-        background: linear-gradient(rgba(10, 11, 13, 0.85), rgba(10, 11, 13, 0.95)), 
-                    url("https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop");
+        background: linear-gradient(rgba(10, 11, 13, 0.7), rgba(10, 11, 13, 0.85)), 
+                    url("https://www.dreamstime.com/abstract-futuristic-background-binary-code-digital-data-screen-dark-concept-image211438962");
         background-size: cover;
+        background-position: center;
         background-attachment: fixed;
         color: #00f2ff;
         font-family: 'Courier New', Courier, monospace;
     }
-    
-    /* Glassmorphism Cards */
-    .login-box, .evidence-card {
-        background: rgba(15, 17, 22, 0.8) !important;
+
+    /* Glassmorphism Evidence Cards */
+    .evidence-card, .login-box {
+        background: rgba(15, 17, 22, 0.7) !important;
         backdrop-filter: blur(12px);
-        border: 2px solid #00f2ff;
+        border: 2px solid rgba(0, 242, 255, 0.3);
         border-radius: 15px;
-        padding: 25px;
+        padding: 20px;
         margin-bottom: 25px;
-        box-shadow: 0px 0px 30px rgba(0, 242, 255, 0.15);
+        box-shadow: 0px 8px 32px 0 rgba(0, 242, 255, 0.2);
+    }
+
+    /* Tab Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: transparent;
+        gap: 10px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        background-color: rgba(0, 242, 255, 0.05);
+        border-radius: 5px 5px 0px 0px;
+        color: #00f2ff;
     }
     
+    /* Neon Text Shadows */
     h1, h2, h3, h4 { 
         color: #00f2ff !important; 
-        text-shadow: 0px 0px 15px rgba(0, 242, 255, 0.7); 
+        text-shadow: 0px 0px 15px rgba(0, 242, 255, 0.7);
         text-transform: uppercase;
         letter-spacing: 2px;
     }
-    
-    /* Futuristic Buttons */
+
+    /* Tactical Buttons */
     .stButton>button {
         width: 100%;
-        background: transparent;
+        background-color: transparent;
         color: #00f2ff;
         border: 2px solid #00f2ff;
         font-weight: bold;
-        transition: all 0.4s ease-in-out;
-        border-radius: 5px;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
     }
-    
     .stButton>button:hover {
-        background: #00f2ff;
+        background-color: #00f2ff;
         color: #000;
         box-shadow: 0px 0px 25px #00f2ff;
-        transform: scale(1.02);
+        transform: translateY(-2px);
     }
 
-    /* Input Fields */
-    input {
-        background-color: rgba(5, 6, 7, 0.7) !important;
-        color: #00f2ff !important;
-        border: 1px solid #00f2ff !important;
+    /* Inputs */
+    input { 
+        background-color: rgba(5, 6, 7, 0.6) !important; 
+        color: #00f2ff !important; 
+        border: 1px solid rgba(0, 242, 255, 0.4) !important; 
     }
     </style>
     """, unsafe_allow_html=True)
@@ -188,7 +204,7 @@ if not st.session_state["logged_in"]:
                 elif add_user(nu, npw, rec): st.success("Registered. Use Login.")
                 else: st.error("ID already exists")
         with t3:
-            st.markdown("### 🔑 KEY RECOVERY")
+            st.markdown("### 🔑 RECOVERY PROTOCOL")
             fu = st.text_input("TARGET AGENT ID", key="f_u")
             frec = st.text_input("SECRET WORD", type="password", key="f_rec")
             fnpw = st.text_input("NEW ACCESS KEY", type="password", key="f_npw")
