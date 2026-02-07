@@ -17,6 +17,7 @@ from report_gen import create_pdf_report
 # --- INITIAL CONFIG ---
 st.set_page_config(page_title="ForensiX-Image Forgery Detector", layout="wide", page_icon="🕵️")
 
+# Initialize Session States
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "user" not in st.session_state:
@@ -104,15 +105,74 @@ def reset_password(u, r, npw):
 
 init_db()
 
-# --- STYLING ---
+# --- THEMED CSS (Neon Data Grid) ---
 st.markdown("""
     <style>
-    .stApp { background-color: #0a0b0d; color: #00f2ff; font-family: 'Courier New', Courier, monospace; }
-    .login-box { max-width: 450px; margin: auto; padding: 40px; background: #0f1116; border: 2px solid #00f2ff; border-radius: 10px; }
-    .evidence-card { background: #0f1116; border: 1px solid #00f2ff; border-radius: 8px; padding: 15px; margin-bottom: 20px; }
-    h1, h2, h3, h4 { color: #00f2ff !important; text-shadow: 0px 0px 8px #00f2ff; }
-    .stButton>button { width: 100%; background: transparent; color: #00f2ff; border: 2px solid #00f2ff; font-weight: bold; }
-    .stButton>button:hover { background: #00f2ff; color: black; box-shadow: 0px 0px 20px #00f2ff; }
+    /* Background Image with Dark Overlay */
+    .stApp {
+        background: linear-gradient(rgba(10, 11, 13, 0.7), rgba(10, 11, 13, 0.85)), 
+                    url("https://www.dreamstime.com/abstract-futuristic-background-binary-code-digital-data-screen-dark-concept-image211438962");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+        color: #00f2ff;
+        font-family: 'Courier New', Courier, monospace;
+    }
+
+    /* Glassmorphism Evidence Cards */
+    .evidence-card, .login-box {
+        background: rgba(15, 17, 22, 0.7) !important;
+        backdrop-filter: blur(12px);
+        border: 2px solid rgba(0, 242, 255, 0.3);
+        border-radius: 15px;
+        padding: 20px;
+        margin-bottom: 25px;
+        box-shadow: 0px 8px 32px 0 rgba(0, 242, 255, 0.2);
+    }
+
+    /* Tab Styling */
+    .stTabs [data-baseweb="tab-list"] {
+        background-color: transparent;
+        gap: 10px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 50px;
+        background-color: rgba(0, 242, 255, 0.05);
+        border-radius: 5px 5px 0px 0px;
+        color: #00f2ff;
+    }
+    
+    /* Neon Text Shadows */
+    h1, h2, h3, h4 { 
+        color: #00f2ff !important; 
+        text-shadow: 0px 0px 15px rgba(0, 242, 255, 0.7);
+        text-transform: uppercase;
+        letter-spacing: 2px;
+    }
+
+    /* Tactical Buttons */
+    .stButton>button {
+        width: 100%;
+        background-color: transparent;
+        color: #00f2ff;
+        border: 2px solid #00f2ff;
+        font-weight: bold;
+        transition: all 0.3s ease;
+        text-transform: uppercase;
+    }
+    .stButton>button:hover {
+        background-color: #00f2ff;
+        color: #000;
+        box-shadow: 0px 0px 25px #00f2ff;
+        transform: translateY(-2px);
+    }
+
+    /* Inputs */
+    input { 
+        background-color: rgba(5, 6, 7, 0.6) !important; 
+        color: #00f2ff !important; 
+        border: 1px solid rgba(0, 242, 255, 0.4) !important; 
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -144,7 +204,7 @@ if not st.session_state["logged_in"]:
                 elif add_user(nu, npw, rec): st.success("Registered. Use Login.")
                 else: st.error("ID already exists")
         with t3:
-            st.markdown("### 🔑 KEY RECOVERY")
+            st.markdown("### 🔑 RECOVERY PROTOCOL")
             fu = st.text_input("TARGET AGENT ID", key="f_u")
             frec = st.text_input("SECRET WORD", type="password", key="f_rec")
             fnpw = st.text_input("NEW ACCESS KEY", type="password", key="f_npw")
@@ -174,7 +234,6 @@ else:
 
     st.markdown("<h1>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
     
-    # --- ADMIN TAB CHECK ---
     if st.session_state["user"].lower() == "sanskar":
         tab_main, tab_admin = st.tabs(["🔍 INVESTIGATION", "📊 ADMIN CONSOLE"])
     else:
@@ -185,7 +244,6 @@ else:
         files = st.file_uploader("SUBMIT DIGITAL EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
 
         if files:
-            # --- SIDE-BY-SIDE SECTION ---
             st.markdown("### 🧬 FORENSIC SIDE-BY-SIDE")
             for f in files:
                 ela_img = convert_to_ela_image(f, quality=90)
