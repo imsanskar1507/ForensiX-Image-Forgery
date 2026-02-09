@@ -114,7 +114,6 @@ if not st.session_state["logged_in"]:
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 else:
-    # --- TOP NAVBAR WITH LARGE WORKING CLOCK ---
     col_title, col_clock = st.columns([2, 1])
     with col_title:
         st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Investigation Suite</h2>', unsafe_allow_html=True)
@@ -130,11 +129,12 @@ else:
     model = get_model()
 
     with st.sidebar:
+        # INCREASED LOCATION FONT SIZE IN STATUS CARD
         st.markdown(f"""
             <div style="background: rgba(0, 242, 255, 0.05); padding: 20px; border-radius: 10px; border: 1px solid #00f2ff; margin-bottom: 25px;">
                 <h4 style="margin:0; font-size: 14px; opacity: 0.8;">OPERATIVE STATUS</h4>
                 <h2 style="margin:0; color: #00f2ff; font-size: 22px;">⚡ {st.session_state['user'].upper()}</h2>
-                <p style="margin:5px 0 0 0; font-size: 11px; color: #00f2ff;">LOCATION: NAGPUR_MS_IN</p>
+                <p style="margin:10px 0 0 0; font-size: 14px; color: #00f2ff; font-weight: bold;">📍 LOCATION: NAGPUR_MS_IN</p>
             </div>
         """, unsafe_allow_html=True)
         case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
@@ -157,7 +157,6 @@ else:
             with c_o: st.image(f, caption="SOURCE")
             with c_h: st.image(heat_img, caption="HEATMAP")
 
-    # --- LIVE CLOCK UPDATE LOOP (INCREASED FONT SIZE) ---
     while st.session_state["logged_in"]:
         now = datetime.now()
         clock_placeholder.markdown(f"""
