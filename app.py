@@ -114,7 +114,7 @@ if not st.session_state["logged_in"]:
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 else:
-    # --- TOP NAVBAR WITH UPDATED CLOCK (SENTENCE REMOVED) ---
+    # --- TOP NAVBAR WITH LARGE WORKING CLOCK ---
     col_title, col_clock = st.columns([2, 1])
     with col_title:
         st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Investigation Suite</h2>', unsafe_allow_html=True)
@@ -157,13 +157,13 @@ else:
             with c_o: st.image(f, caption="SOURCE")
             with c_h: st.image(heat_img, caption="HEATMAP")
 
-    # --- LIVE CLOCK UPDATE LOOP (REMOVED 'SYSTEM DATE' LABEL) ---
+    # --- LIVE CLOCK UPDATE LOOP (INCREASED FONT SIZE) ---
     while st.session_state["logged_in"]:
         now = datetime.now()
         clock_placeholder.markdown(f"""
             <div style="text-align: right; background: rgba(0, 242, 255, 0.1); padding: 5px 15px; border-radius: 5px; border-left: 3px solid #00f2ff;">
-                <span style="color: #00f2ff; font-size: 11px; font-weight: bold;">{now.strftime('%d %b %Y')}</span><br>
-                <span style="color: #ffffff; font-size: 18px; font-family: 'Courier New';">{now.strftime('%I:%M:%S %p')}</span>
+                <span style="color: #00f2ff; font-size: 16px; font-weight: bold;">{now.strftime('%d %b %Y')}</span><br>
+                <span style="color: #ffffff; font-size: 24px; font-family: 'Courier New';">{now.strftime('%I:%M:%S %p')}</span>
             </div>
         """, unsafe_allow_html=True)
         time.sleep(1)
