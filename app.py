@@ -9,7 +9,7 @@ import hashlib
 import cv2
 import io
 import zipfile
-import time # Added for clock refresh
+import time 
 from processor import convert_to_ela_image, prepare_image_for_cnn
 from metadata_scanner import scan_metadata
 from tensorflow.keras.models import load_model
@@ -114,12 +114,11 @@ if not st.session_state["logged_in"]:
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 else:
-    # --- TOP NAVBAR WITH WORKING CLOCK ---
+    # --- TOP NAVBAR WITH UPDATED CLOCK (SENTENCE REMOVED) ---
     col_title, col_clock = st.columns([2, 1])
     with col_title:
         st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Investigation Suite</h2>', unsafe_allow_html=True)
     
-    # Placeholders for the live clock
     with col_clock:
         clock_placeholder = st.empty()
 
@@ -158,13 +157,12 @@ else:
             with c_o: st.image(f, caption="SOURCE")
             with c_h: st.image(heat_img, caption="HEATMAP")
 
-    # --- LIVE CLOCK UPDATE LOOP ---
-    # This must be at the end of the script to keep the UI responsive
+    # --- LIVE CLOCK UPDATE LOOP (REMOVED 'SYSTEM DATE' LABEL) ---
     while st.session_state["logged_in"]:
         now = datetime.now()
         clock_placeholder.markdown(f"""
             <div style="text-align: right; background: rgba(0, 242, 255, 0.1); padding: 5px 15px; border-radius: 5px; border-left: 3px solid #00f2ff;">
-                <span style="color: #00f2ff; font-size: 11px; font-weight: bold;">SYSTEM DATE: {now.strftime('%d %b %Y')}</span><br>
+                <span style="color: #00f2ff; font-size: 11px; font-weight: bold;">{now.strftime('%d %b %Y')}</span><br>
                 <span style="color: #ffffff; font-size: 18px; font-family: 'Courier New';">{now.strftime('%I:%M:%S %p')}</span>
             </div>
         """, unsafe_allow_html=True)
