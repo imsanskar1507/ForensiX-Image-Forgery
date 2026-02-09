@@ -46,14 +46,11 @@ def generate_heatmap(original_img_bytes, ela_img):
     heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
     return cv2.addWeighted(original, 0.6, heatmap_color, 0.4, 0)
 
-# --- DATABASE LOGIC ---
+# --- DATABASE ENGINE ---
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, recovery TEXT)')
-    c.execute("PRAGMA table_info(users)")
-    if 'recovery' not in [col[1] for col in c.fetchall()]:
-        c.execute('ALTER TABLE users ADD COLUMN recovery TEXT')
     c.execute("SELECT * FROM users WHERE username='sanskar'")
     if not c.fetchone():
         hp = hashlib.sha256("detective2026".encode()).hexdigest()
@@ -73,7 +70,7 @@ def check_user(u, p):
 
 init_db()
 
-# --- DYNAMIC CSS ---
+# --- CSS STYLING ---
 if not st.session_state["logged_in"]:
     st.markdown("""
         <style>
@@ -109,7 +106,7 @@ else:
         </style>
         """, unsafe_allow_html=True)
 
-# --- APP FLOW ---
+# --- LOGIN / MAIN APP ---
 if not st.session_state["logged_in"]:
     st.markdown("<br><h1 style='text-align:center;'>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
@@ -120,15 +117,14 @@ if not st.session_state["logged_in"]:
         if st.button("AUTHORIZE"):
             if check_user(u_in, p_in):
                 st.session_state["logged_in"], st.session_state["user"] = True, u_in.strip()
-                log_forensic_action(f"Agent {u_in.upper()} authorized session.")
+                log_forensic_action(f"Agent {u_in.upper()} authorized.")
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 else:
-    # --- TOP NAVBAR WITH LARGE WORKING CLOCK ---
+    # --- NAV BAR & CLOCK ---
     col_title, col_clock = st.columns([2, 1])
     with col_title:
         st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Investigation Suite</h2>', unsafe_allow_html=True)
-    
     with col_clock:
         clock_placeholder = st.empty()
 
@@ -147,36 +143,58 @@ else:
                 <p style="margin:10px 0 0 0; font-size: 14px; color: #00f2ff; font-weight: bold;">📍 LOCATION: NAGPUR_MS_IN</p>
             </div>
         """, unsafe_allow_html=True)
-        
-        st.markdown("### 📜 SESSION LOG")
-        with st.expander("Chain of Custody", expanded=False):
-            for entry in st.session_state["case_log"]:
-                st.text(entry)
-
         case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
         st.markdown('<div class="dossier-header">📝 INVESTIGATION LOG</div><div class="dossier-box">', unsafe_allow_html=True)
         case_notes = st.text_area("FIELD NOTES", height=200, label_visibility="collapsed")
         st.markdown('</div>', unsafe_allow_html=True)
-        
-        if st.button("🔴 EXIT SYSTEM"):
-            log_forensic_action("Session terminated by agent.")
-            st.session_state["logged_in"] = False; st.rerun()
+        if st.button("🔴 EXIT"): st.session_state["logged_in"] = False; st.rerun()
 
     st.markdown("---")
     
     files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
+    
     if files:
         for f in files:
             f_hash = get_file_hash(f.getvalue())
-            log_forensic_action(f"Exhibit {f.name} uploaded. Hash: {f_hash}")
             st.info(f"🧬 EXHIBIT {f.name} | HASH: {f_hash}")
+            c1, c2 = st.columns(2)
             ela_img = convert_to_ela_image(f, quality=90)
             heat_img = generate_heatmap(f.getvalue(), ela_img)
-            c_o, c_h = st.columns(2)
-            with c_o: st.image(f, caption="SOURCE")
-            with c_h: st.image(heat_img, caption="HEATMAP")
+            with c1: st.image(f, caption="SOURCE")
+            with c2: st.image(heat_img, caption="HEATMAP")
 
-    # --- LIVE CLOCK UPDATE LOOP (INCREASED FONT SIZE) ---
+        # --- THE SCAN TRIGGER ---
+        if st.button("INITIATE DEEP SCAN"):
+            results, zip_buffer = [], io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zf:
+                bar = st.progress(0)
+                with st.status("📡 ANALYZING...", expanded=True) as status:
+                    for idx, f in enumerate(files):
+                        tmp = f"temp_{f.name}"
+                        with open(tmp, "wb") as b: b.write(f.getbuffer())
+                        
+                        # Process Model prediction
+                        _, m_msg = scan_metadata(tmp)
+                        proc = prepare_image_for_cnn(tmp)
+                        pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
+                        
+                        os.remove(tmp)
+                        v = "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN"
+                        results.append({"FILENAME": f.name, "VERDICT": v, "CONFIDENCE": float(max(pred, 1-pred)*100), "METADATA": m_msg})
+                        bar.progress((idx+1)/len(files))
+                    
+                    # Generate the PDF Report
+                    pdf_d = create_pdf_report(results, case_notes=case_notes)
+                    zf.writestr(f"Forensic_Report_{case_id}.pdf", pdf_d)
+                    status.update(label="SCAN COMPLETE", state="complete")
+
+            # Final Results Display
+            st.markdown("### 📊 FINAL DETERMINATION")
+            df = pd.DataFrame(results)
+            st.dataframe(df, use_container_width=True, hide_index=True)
+            st.download_button("📥 EXPORT INVESTIGATION DOSSIER (.ZIP)", zip_buffer.getvalue(), f"CASE_{case_id}.zip")
+
+    # Live Clock
     while st.session_state["logged_in"]:
         now = datetime.now()
         clock_placeholder.markdown(f"""
