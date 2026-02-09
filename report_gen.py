@@ -20,8 +20,11 @@ def create_pdf_report(results_list, case_notes=""):
     pdf = ForensicReport()
     pdf.add_page()
     pdf.set_font("Courier", size=11)
-    pdf.cell(0, 10, txt=f"DATE: {datetime.now().strftime('%Y-%m-%d')}", ln=True)
+    # Added System Timestamp to the header of the PDF
+    pdf.cell(0, 10, txt=f"GENERATED: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True)
+    pdf.cell(0, 10, txt=f"LOCATION: NAGPUR_MS_IN", ln=True)
     pdf.ln(5)
+    
     pdf.set_font("Courier", 'B', 14)
     pdf.set_text_color(139, 0, 0)
     pdf.cell(0, 10, txt="OFFICIAL INVESTIGATOR CONCLUSION:", ln=True)
@@ -29,6 +32,7 @@ def create_pdf_report(results_list, case_notes=""):
     pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 6, txt=clean_text(case_notes))
     pdf.ln(10)
+    
     for res in results_list:
         pdf.set_draw_color(0, 242, 255)
         pdf.cell(0, 0, '', 'T', ln=True)

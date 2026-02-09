@@ -24,9 +24,11 @@ if "user" not in st.session_state:
 
 # --- CORE UTILITIES ---
 def get_timestamp():
+    """Returns a formatted forensic timestamp for Nagpur, India."""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def get_file_hash(file_bytes):
+    """Calculates SHA-256 for data integrity."""
     return hashlib.sha256(file_bytes).hexdigest()
 
 def generate_heatmap(original_img_bytes, ela_img):
@@ -106,7 +108,7 @@ def reset_password(u, r, npw):
 
 init_db()
 
-# --- STYLING ---
+# --- DYNAMIC STYLING ---
 if not st.session_state["logged_in"]:
     st.markdown("""
         <style>
