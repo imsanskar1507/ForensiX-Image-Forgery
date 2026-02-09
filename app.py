@@ -9,6 +9,7 @@ import hashlib
 import cv2
 import io
 import zipfile
+import time # Added for clock refresh
 from processor import convert_to_ela_image, prepare_image_for_cnn
 from metadata_scanner import scan_metadata
 from tensorflow.keras.models import load_model
@@ -23,12 +24,7 @@ if "user" not in st.session_state:
     st.session_state["user"] = "Unknown"
 
 # --- CORE UTILITIES ---
-def get_timestamp():
-    """Returns a formatted forensic timestamp for Nagpur, India."""
-    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
 def get_file_hash(file_bytes):
-    """Calculates SHA-256 for data integrity."""
     return hashlib.sha256(file_bytes).hexdigest()
 
 def generate_heatmap(original_img_bytes, ela_img):
@@ -57,32 +53,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-def get_all_users():
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("SELECT username FROM users")
-    return c.fetchall()
-
-def delete_user(username):
-    if username.lower() == "sanskar": return False
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute("DELETE FROM users WHERE username=?", (username,))
-    conn.commit()
-    conn.close()
-    return True
-
-def add_user(u, p, r):
-    try:
-        conn = sqlite3.connect('users.db')
-        c = conn.cursor()
-        hp, hr = hashlib.sha256(p.encode()).hexdigest(), hashlib.sha256(r.lower().strip().encode()).hexdigest()
-        c.execute("INSERT INTO users VALUES (?, ?, ?)", (u.lower().strip(), hp, hr))
-        conn.commit()
-        conn.close()
-        return True
-    except: return False
-
 def check_user(u, p):
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
@@ -92,23 +62,9 @@ def check_user(u, p):
     conn.close()
     return res
 
-def reset_password(u, r, npw):
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    hr = hashlib.sha256(r.lower().strip().encode()).hexdigest()
-    c.execute("SELECT * FROM users WHERE username=? AND recovery=?", (u.lower().strip(), hr))
-    if c.fetchone():
-        nhp = hashlib.sha256(npw.encode()).hexdigest()
-        c.execute("UPDATE users SET password=? WHERE username=?", (nhp, u.lower().strip()))
-        conn.commit()
-        conn.close()
-        return True
-    conn.close()
-    return False
-
 init_db()
 
-# --- DYNAMIC STYLING ---
+# --- DYNAMIC CSS ---
 if not st.session_state["logged_in"]:
     st.markdown("""
         <style>
@@ -119,12 +75,8 @@ if not st.session_state["logged_in"]:
         }
         .login-box {
             background: rgba(15, 17, 22, 0.75) !important; backdrop-filter: blur(15px);
-            border: 2px solid #00f2ff; border-radius: 15px; padding: 25px; box-shadow: 0px 0px 30px rgba(0, 242, 255, 0.2);
+            border: 2px solid #00f2ff; border-radius: 15px; padding: 25px;
         }
-        h1, h2 { color: #00f2ff !important; text-shadow: 0px 0px 15px rgba(0, 242, 255, 0.8); }
-        .stButton>button { background: transparent; color: #00f2ff; border: 2px solid #00f2ff; }
-        .stButton>button:hover { background: #00f2ff; color: #000; box-shadow: 0px 0px 25px #00f2ff; }
-        input { background-color: rgba(0, 0, 0, 0.5) !important; color: #00f2ff !important; border: 1px solid #00f2ff !important; }
         </style>
         """, unsafe_allow_html=True)
 else:
@@ -134,7 +86,7 @@ else:
         section[data-testid="stSidebar"] { background-color: #0f1116 !important; border-right: 1px solid #00f2ff; }
         .evidence-card {
             background: #0f1116; border: 1px solid #00f2ff; border-radius: 12px;
-            padding: 20px; margin-bottom: 20px; box-shadow: 0px 0px 15px rgba(0, 242, 255, 0.1);
+            padding: 20px; margin-bottom: 20px;
         }
         .dossier-header {
             background-color: #00f2ff; color: #000; padding: 5px 15px; font-weight: bold;
@@ -143,44 +95,34 @@ else:
         .dossier-box {
             background: rgba(25, 27, 32, 0.95) !important;
             border: 1px solid #00f2ff !important;
-            border-radius: 0 5px 5px 5px; padding: 10px; margin-bottom: 20px;
-        }
-        section[data-testid="stSidebar"] .stTextArea textarea {
-            background-color: transparent !important; border: none !important; color: #00f2ff !important;
-            font-family: 'Courier New', Courier, monospace !important; font-size: 13px !important;
+            border-radius: 0 5px 5px 5px; padding: 10px;
         }
         </style>
         """, unsafe_allow_html=True)
 
-# --- LOGIN FLOW ---
+# --- APP FLOW ---
 if not st.session_state["logged_in"]:
     st.markdown("<br><h1 style='text-align:center;'>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
-        st.markdown("<h2 style='text-align:center;'>🔒 PORTAL ACCESS</h2>", unsafe_allow_html=True)
-        t1, t2, t3 = st.tabs(["LOGIN", "REGISTER", "FORGOT KEY"])
-        with t1:
-            u_in, p_in = st.text_input("AGENT ID", key="l_u"), st.text_input("ACCESS KEY", type="password", key="l_p")
-            if st.button("AUTHORIZE"):
-                if check_user(u_in, p_in):
-                    st.session_state["logged_in"], st.session_state["user"] = True, u_in.strip()
-                    st.rerun()
-                else: st.error("INVALID CREDENTIALS")
-        with t2:
-            nu, npw, ncpw, rec = st.text_input("NEW ID"), st.text_input("KEY", type="password"), st.text_input("CONFIRM", type="password"), st.text_input("RECOVERY WORD")
-            if st.button("CREATE ACCOUNT"):
-                if npw != ncpw: st.error("Keys mismatch")
-                elif add_user(nu, npw, rec): st.success("Created. Proceed to Login.")
-                else: st.error("ID exists")
-        with t3:
-            fu, frec, fnpw = st.text_input("ID", key="f_u"), st.text_input("SECRET", type="password"), st.text_input("NEW KEY", type="password")
-            if st.button("RESET"):
-                if reset_password(fu, frec, fnpw): st.success("Updated.")
-                else: st.error("Failed")
+        u_in = st.text_input("AGENT ID")
+        p_in = st.text_input("ACCESS KEY", type="password")
+        if st.button("AUTHORIZE"):
+            if check_user(u_in, p_in):
+                st.session_state["logged_in"], st.session_state["user"] = True, u_in.strip()
+                st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
-
 else:
+    # --- TOP NAVBAR WITH WORKING CLOCK ---
+    col_title, col_clock = st.columns([2, 1])
+    with col_title:
+        st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Investigation Suite</h2>', unsafe_allow_html=True)
+    
+    # Placeholders for the live clock
+    with col_clock:
+        clock_placeholder = st.empty()
+
     @st.cache_resource
     def get_model():
         mp = os.path.join(os.path.dirname(__file__), 'forgery_detector.h5')
@@ -188,95 +130,42 @@ else:
     
     model = get_model()
 
-    # --- SIDEBAR WITH LIVE TIME ---
     with st.sidebar:
         st.markdown(f"""
             <div style="background: rgba(0, 242, 255, 0.05); padding: 20px; border-radius: 10px; border: 1px solid #00f2ff; margin-bottom: 25px;">
                 <h4 style="margin:0; font-size: 14px; opacity: 0.8;">OPERATIVE STATUS</h4>
                 <h2 style="margin:0; color: #00f2ff; font-size: 22px;">⚡ {st.session_state['user'].upper()}</h2>
-                <p style="margin:5px 0 0 0; font-size: 11px; color: #00f2ff;">
-                    🕒 SYSTEM TIME: {get_timestamp()}<br>
-                    📍 LOCATION: NAGPUR_MS_IN
-                </p>
+                <p style="margin:5px 0 0 0; font-size: 11px; color: #00f2ff;">LOCATION: NAGPUR_MS_IN</p>
             </div>
         """, unsafe_allow_html=True)
-        st.markdown("### 📂 CASE MANAGEMENT")
         case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
-        st.markdown("---")
         st.markdown('<div class="dossier-header">📝 INVESTIGATION LOG</div><div class="dossier-box">', unsafe_allow_html=True)
         case_notes = st.text_area("FIELD NOTES", height=250, label_visibility="collapsed")
         st.markdown('</div>', unsafe_allow_html=True)
         if st.button("🔴 EXIT SYSTEM"):
             st.session_state["logged_in"] = False; st.rerun()
 
-    st.markdown("<h1>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
+    st.markdown("---")
     
-    if st.session_state["user"].lower() == "sanskar":
-        tab_main, tab_admin = st.tabs(["🔍 INVESTIGATION", "📊 ADMIN CONSOLE"])
-    else: tab_main, tab_admin = st.container(), None
+    files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
+    if files:
+        for f in files:
+            f_hash = get_file_hash(f.getvalue())
+            st.info(f"🧬 EXHIBIT {f.name} | HASH: {f_hash}")
+            ela_img = convert_to_ela_image(f, quality=90)
+            heat_img = generate_heatmap(f.getvalue(), ela_img)
+            c_o, c_h = st.columns(2)
+            with c_o: st.image(f, caption="SOURCE")
+            with c_h: st.image(heat_img, caption="HEATMAP")
 
-    with tab_main:
-        files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
-        if files:
-            st.markdown("### 🧬 SIDE-BY-SIDE COMPARISON")
-            for f in files:
-                f_hash = get_file_hash(f.getvalue())
-                st.info(f"🧬 EXHIBIT {f.name} | LOGGED: {get_timestamp()} | HASH: {f_hash}")
-                ela_img = convert_to_ela_image(f, quality=90)
-                heat_img = generate_heatmap(f.getvalue(), ela_img)
-                c_o, c_h = st.columns(2)
-                with c_o: 
-                    st.markdown('<div class="evidence-card"><h4>SOURCE</h4>', unsafe_allow_html=True)
-                    st.image(f, use_container_width=True); st.markdown('</div>', unsafe_allow_html=True)
-                with c_h: 
-                    st.markdown('<div class="evidence-card"><h4>HEATMAP</h4>', unsafe_allow_html=True)
-                    st.image(heat_img, use_container_width=True); st.markdown('</div>', unsafe_allow_html=True)
-
-            if st.button("INITIATE DEEP SCAN"):
-                results, zip_buffer = [], io.BytesIO()
-                with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zf:
-                    bar = st.progress(0)
-                    with st.status("📡 ANALYZING...", expanded=True) as status:
-                        for idx, f in enumerate(files):
-                            tmp = f"temp_{f.name}"
-                            with open(tmp, "wb") as b: b.write(f.getbuffer())
-                            _, m_msg = scan_metadata(tmp)
-                            proc = prepare_image_for_cnn(tmp)
-                            pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
-                            ela = convert_to_ela_image(f, quality=90)
-                            heat = generate_heatmap(f.getvalue(), ela)
-                            zf.writestr(f"Source_{f.name}", f.getvalue())
-                            e_io = io.BytesIO(); ela.save(e_io, format="PNG"); zf.writestr(f"ELA_{f.name}.png", e_io.getvalue())
-                            h_io = io.BytesIO(); Image.fromarray(heat).save(h_io, format="PNG"); zf.writestr(f"Heatmap_{f.name}.png", h_io.getvalue())
-                            os.remove(tmp)
-                            v = "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN"
-                            results.append({"FILENAME": f.name, "VERDICT": v, "CONFIDENCE": float(max(pred, 1-pred)*100), "METADATA": m_msg})
-                            bar.progress((idx+1)/len(files))
-                        pdf_d = create_pdf_report(results, case_notes=case_notes)
-                        zf.writestr(f"Report_{case_id}.pdf", pdf_d)
-                        status.update(label="COMPLETE", state="complete")
-                st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
-                df = pd.DataFrame(results)
-                st.dataframe(df, use_container_width=True, hide_index=True)
-                c1, c2, c3 = st.columns(3)
-                c1.metric("SCANNED", len(results)); c2.metric("FLAGGED", len(df[df['VERDICT'] == "🚩 FORGERY"]))
-                with c3: st.download_button("📥 EXPORT BUNDLE (.ZIP)", zip_buffer.getvalue(), f"CASE_{case_id}.zip")
-                st.markdown('</div>', unsafe_allow_html=True)
-
-    if tab_admin:
-        with tab_admin:
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.markdown('<div class="evidence-card"><h4>AGENTS</h4>', unsafe_allow_html=True)
-                u_list = get_all_users()
-                for u_e in u_list:
-                    u_n = u_e[0]
-                    ca1, ca2 = st.columns([3, 1])
-                    ca1.text(f"👤 {u_n.upper()}")
-                    if u_n != "sanskar" and ca2.button("REVOKE", key=f"d_{u_n}"): 
-                        if delete_user(u_n): st.rerun()
-                st.markdown('</div>', unsafe_allow_html=True)
-            with col_b:
-                st.markdown('<div class="evidence-card"><h4>METRICS</h4>', unsafe_allow_html=True)
-                st.metric("DB STATUS", "ONLINE"); st.metric("AGENTS", len(u_list))
-                st.markdown('</div>', unsafe_allow_html=True)
+    # --- LIVE CLOCK UPDATE LOOP ---
+    # This must be at the end of the script to keep the UI responsive
+    while st.session_state["logged_in"]:
+        now = datetime.now()
+        clock_placeholder.markdown(f"""
+            <div style="text-align: right; background: rgba(0, 242, 255, 0.1); padding: 5px 15px; border-radius: 5px; border-left: 3px solid #00f2ff;">
+                <span style="color: #00f2ff; font-size: 11px; font-weight: bold;">SYSTEM DATE: {now.strftime('%d %b %Y')}</span><br>
+                <span style="color: #ffffff; font-size: 18px; font-family: 'Courier New';">{now.strftime('%I:%M:%S %p')}</span>
+            </div>
+        """, unsafe_allow_html=True)
+        time.sleep(1)

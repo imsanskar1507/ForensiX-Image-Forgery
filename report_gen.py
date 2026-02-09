@@ -20,7 +20,6 @@ def create_pdf_report(results_list, case_notes=""):
     pdf = ForensicReport()
     pdf.add_page()
     pdf.set_font("Courier", size=11)
-    # Added System Timestamp to the header of the PDF
     pdf.cell(0, 10, txt=f"GENERATED: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True)
     pdf.cell(0, 10, txt=f"LOCATION: NAGPUR_MS_IN", ln=True)
     pdf.ln(5)
