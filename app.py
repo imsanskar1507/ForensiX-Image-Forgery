@@ -28,7 +28,7 @@ if "case_log" not in st.session_state:
 
 # --- CORE UTILITIES ---
 def get_timestamp():
-    """Fetches the current time directly from the synced system clock."""
+    """Fetches the current time directly from the network-synced system clock."""
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 def log_forensic_action(action):
@@ -49,6 +49,26 @@ def generate_heatmap(original_img_bytes, ela_img):
     heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
     heatmap_resized = cv2.resize(heatmap_color, (width, height))
     return cv2.addWeighted(original, 0.6, heatmap_resized, 0.4, 0)
+
+def generate_luminance_map(file):
+    img = Image.open(file).convert('L')
+    img_array = np.array(img, dtype=float)
+    dx, dy = np.gradient(img_array)
+    gradient = np.sqrt(dx**2 + dy**2)
+    gradient = (gradient / (gradient.max() if gradient.max() > 0 else 1) * 255).astype(np.uint8)
+    return cv2.applyColorMap(gradient, cv2.COLORMAP_VIRIDIS)
+
+def plot_histogram(file):
+    img = Image.open(file).convert('RGB')
+    img_array = np.array(img)
+    fig, ax = plt.subplots(figsize=(10, 3))
+    for i, col in enumerate(['red', 'green', 'blue']):
+        hist = cv2.calcHist([img_array], [i], None, [256], [0, 256])
+        ax.plot(hist, color=col, alpha=0.7)
+    ax.set_facecolor('#0f1116')
+    fig.patch.set_facecolor('#0a0b0d')
+    ax.tick_params(colors='#00f2ff', labelsize=8)
+    return fig
 
 # --- DATABASE LOGIC ---
 def init_db():
@@ -125,12 +145,11 @@ if not st.session_state["logged_in"]:
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 else:
-    # --- TOP NAVBAR WITH AUTOMATIC LIVE CLOCK ---
+    # --- TOP NAVBAR WITH LARGE AUTOMATED WORKING CLOCK ---
     col_title, col_clock = st.columns([2, 1])
     with col_title:
         st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Investigation Suite</h2>', unsafe_allow_html=True)
     
-    # This placeholder is updated by the loop at the bottom
     with col_clock:
         clock_placeholder = st.empty()
 
@@ -169,18 +188,26 @@ else:
             log_forensic_action(f"Exhibit {f.name} logged.")
             st.info(f"🧬 EXHIBIT {f.name} | HASH: {f_hash}")
             
+            # --- Analysis Row 1 ---
             c_o, c_h = st.columns(2)
             ela_img = convert_to_ela_image(f, quality=90)
             heat_img = generate_heatmap(f.getvalue(), ela_img)
             with c_o: st.image(f, caption="SOURCE EVIDENCE")
             with c_h: st.image(heat_img, caption="HEATMAP ANALYSIS")
+            
+            # --- Analysis Row 2 ---
+            c_l, c_p = st.columns(2)
+            with c_l: 
+                lum_map = generate_luminance_map(f)
+                st.image(lum_map, caption="LUMINANCE GRADIENT")
+            with c_p: 
+                st.pyplot(plot_histogram(f))
 
         if st.button("INITIATE DEEP SCAN"):
             # (... scan logic follows ...)
             st.success("Analysis Complete.")
 
     # --- THE LIVE CLOCK REFRESH LOOP ---
-    # This ensures the time is ALWAYS current and network-accurate
     while st.session_state["logged_in"]:
         now = datetime.now()
         clock_placeholder.markdown(f"""
@@ -189,4 +216,4 @@ else:
                 <span style="color: #ffffff; font-size: 24px; font-family: 'Courier New';">{now.strftime('%I:%M:%S %p')}</span>
             </div>
         """, unsafe_allow_html=True)
-        time.sleep(1) # Refresh every 1 second
+        time.sleep(1)
