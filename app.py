@@ -23,6 +23,9 @@ if "user" not in st.session_state:
     st.session_state["user"] = "Unknown"
 
 # --- CORE UTILITIES ---
+def get_file_hash(file_bytes):
+    return hashlib.sha256(file_bytes).hexdigest()
+
 def generate_heatmap(original_img_bytes, ela_img):
     nparr = np.frombuffer(original_img_bytes, np.uint8)
     original = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -33,7 +36,7 @@ def generate_heatmap(original_img_bytes, ela_img):
     heatmap_color = cv2.cvtColor(heatmap_color, cv2.COLOR_BGR2RGB)
     return cv2.addWeighted(original, 0.6, heatmap_color, 0.4, 0)
 
-# --- DATABASE ENGINE ---
+# --- DATABASE LOGIC ---
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
@@ -100,7 +103,7 @@ def reset_password(u, r, npw):
 
 init_db()
 
-# --- DYNAMIC STYLING ---
+# --- DYNAMIC CSS ENGINE ---
 if not st.session_state["logged_in"]:
     st.markdown("""
         <style>
@@ -111,22 +114,34 @@ if not st.session_state["logged_in"]:
         }
         .login-box {
             background: rgba(15, 17, 22, 0.75) !important; backdrop-filter: blur(15px);
-            border: 2px solid #00f2ff; border-radius: 15px; padding: 30px; 
-            box-shadow: 0px 0px 30px rgba(0, 242, 255, 0.2);
+            border: 2px solid #00f2ff; border-radius: 15px; padding: 25px; box-shadow: 0px 0px 30px rgba(0, 242, 255, 0.2);
         }
+        h1, h2 { color: #00f2ff !important; text-shadow: 0px 0px 15px rgba(0, 242, 255, 0.8); }
+        .stButton>button { background: transparent; color: #00f2ff; border: 2px solid #00f2ff; }
+        .stButton>button:hover { background: #00f2ff; color: #000; box-shadow: 0px 0px 25px #00f2ff; }
+        input { background-color: rgba(0, 0, 0, 0.5) !important; color: #00f2ff !important; border: 1px solid #00f2ff !important; }
         </style>
         """, unsafe_allow_html=True)
 else:
     st.markdown("""
         <style>
         .stApp { background-color: #0a0b0d; color: #00f2ff; font-family: 'Courier New', monospace; }
-        section[data-testid="stSidebar"] { 
-            background-color: #0f1116 !important; 
-            border-right: 2px solid #00f2ff !important; 
+        section[data-testid="stSidebar"] { background-color: #0f1116 !important; border-right: 1px solid #00f2ff; }
+        .evidence-card {
+            background: #0f1116; border: 1px solid #00f2ff; border-radius: 12px;
+            padding: 20px; margin-bottom: 20px; box-shadow: 0px 0px 15px rgba(0, 242, 255, 0.1);
         }
-        .evidence-card { 
-            background: rgba(15, 17, 22, 0.8); border: 1px solid #00f2ff; 
-            border-radius: 12px; padding: 20px; margin-bottom: 20px;
+        .dossier-header {
+            background-color: #00f2ff; color: #000; padding: 5px 15px; font-weight: bold;
+            font-size: 12px; border-radius: 5px 5px 0 0; letter-spacing: 1px; display: inline-block;
+        }
+        .dossier-box {
+            background: rgba(0, 242, 255, 0.05) !important; border: 1px solid #00f2ff !important;
+            border-radius: 0 5px 5px 5px; padding: 10px; margin-bottom: 20px;
+        }
+        section[data-testid="stSidebar"] .stTextArea textarea {
+            background-color: transparent !important; border: none !important; color: #00f2ff !important;
+            font-family: 'Courier New', Courier, monospace !important; font-size: 13px !important;
         }
         </style>
         """, unsafe_allow_html=True)
@@ -154,7 +169,7 @@ if not st.session_state["logged_in"]:
                 else: st.error("ID exists")
         with t3:
             fu, frec, fnpw = st.text_input("ID", key="f_u"), st.text_input("SECRET", type="password"), st.text_input("NEW KEY", type="password")
-            if st.button("RESET ACCESS"):
+            if st.button("RESET"):
                 if reset_password(fu, frec, fnpw): st.success("Updated.")
                 else: st.error("Failed")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -167,7 +182,6 @@ else:
     
     model = get_model()
 
-    # --- MANAGED SIDEBAR ---
     with st.sidebar:
         st.markdown(f"""
             <div style="background: rgba(0, 242, 255, 0.05); padding: 20px; border-radius: 10px; border: 1px solid #00f2ff; margin-bottom: 25px;">
@@ -176,15 +190,12 @@ else:
                 <p style="margin:5px 0 0 0; font-size: 10px; color: #00f2ff;">LOCATION: NAGPUR_MS_IN</p>
             </div>
         """, unsafe_allow_html=True)
-        st.markdown("### 📂 CASE MANAGEMENT")
         case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
-        st.markdown("---")
-        st.markdown("### 📝 INVESTIGATION LOG")
-        case_notes = st.text_area("FIELD NOTES", height=200)
-        st.markdown("<br>"*3, unsafe_allow_html=True)
+        st.markdown('<div class="dossier-header">📝 INVESTIGATION LOG</div><div class="dossier-box">', unsafe_allow_html=True)
+        case_notes = st.text_area("FIELD NOTES", height=250, label_visibility="collapsed")
+        st.markdown('</div>', unsafe_allow_html=True)
         if st.button("🔴 EXIT SYSTEM"):
-            st.session_state["logged_in"] = False
-            st.rerun()
+            st.session_state["logged_in"] = False; st.rerun()
 
     st.markdown("<h1>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
     
@@ -195,8 +206,9 @@ else:
     with tab_main:
         files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
         if files:
-            st.markdown("### 🧬 SIDE-BY-SIDE COMPARISON")
             for f in files:
+                f_hash = get_file_hash(f.getvalue())
+                st.info(f"🧬 EXHIBIT {f.name} Fingerprint: {f_hash}")
                 ela_img = convert_to_ela_image(f, quality=90)
                 heat_img = generate_heatmap(f.getvalue(), ela_img)
                 c_o, c_h = st.columns(2)
@@ -218,28 +230,24 @@ else:
                             _, m_msg = scan_metadata(tmp)
                             proc = prepare_image_for_cnn(tmp)
                             pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
-                            
                             ela = convert_to_ela_image(f, quality=90)
                             heat = generate_heatmap(f.getvalue(), ela)
                             zf.writestr(f"Source_{f.name}", f.getvalue())
                             e_io = io.BytesIO(); ela.save(e_io, format="PNG"); zf.writestr(f"ELA_{f.name}.png", e_io.getvalue())
                             h_io = io.BytesIO(); Image.fromarray(heat).save(h_io, format="PNG"); zf.writestr(f"Heatmap_{f.name}.png", h_io.getvalue())
-                            
                             os.remove(tmp)
                             v = "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN"
                             results.append({"FILENAME": f.name, "VERDICT": v, "CONFIDENCE": float(max(pred, 1-pred)*100), "METADATA": m_msg})
                             bar.progress((idx+1)/len(files))
-                        
                         pdf_d = create_pdf_report(results, case_notes=case_notes)
                         zf.writestr(f"Report_{case_id}.pdf", pdf_d)
                         status.update(label="COMPLETE", state="complete")
-
                 st.markdown('<div class="evidence-card">', unsafe_allow_html=True)
                 df = pd.DataFrame(results)
                 st.dataframe(df, use_container_width=True, hide_index=True)
                 c1, c2, c3 = st.columns(3)
                 c1.metric("SCANNED", len(results)); c2.metric("FLAGGED", len(df[df['VERDICT'] == "🚩 FORGERY"]))
-                with c3: st.download_button("📥 EXPORT TACTICAL BUNDLE (.ZIP)", zip_buffer.getvalue(), f"CASE_{case_id}.zip")
+                with c3: st.download_button("📥 EXPORT BUNDLE (.ZIP)", zip_buffer.getvalue(), f"CASE_{case_id}.zip")
                 st.markdown('</div>', unsafe_allow_html=True)
 
     if tab_admin:
