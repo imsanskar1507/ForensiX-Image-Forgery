@@ -2,7 +2,7 @@ import streamlit as st
 import numpy as np
 from PIL import Image
 import os
-import time
+from datetime import datetime
 import pandas as pd
 import sqlite3
 import hashlib
@@ -23,6 +23,9 @@ if "user" not in st.session_state:
     st.session_state["user"] = "Unknown"
 
 # --- CORE UTILITIES ---
+def get_timestamp():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
 def get_file_hash(file_bytes):
     return hashlib.sha256(file_bytes).hexdigest()
 
@@ -41,11 +44,9 @@ def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, recovery TEXT)')
-    # Ensure recovery column exists
     c.execute("PRAGMA table_info(users)")
     if 'recovery' not in [col[1] for col in c.fetchall()]:
         c.execute('ALTER TABLE users ADD COLUMN recovery TEXT')
-    # Default Admin: sanskar
     c.execute("SELECT * FROM users WHERE username='sanskar'")
     if not c.fetchone():
         hp = hashlib.sha256("detective2026".encode()).hexdigest()
@@ -105,7 +106,7 @@ def reset_password(u, r, npw):
 
 init_db()
 
-# --- DYNAMIC CSS ENGINE ---
+# --- STYLING ---
 if not st.session_state["logged_in"]:
     st.markdown("""
         <style>
@@ -133,16 +134,14 @@ else:
             background: #0f1116; border: 1px solid #00f2ff; border-radius: 12px;
             padding: 20px; margin-bottom: 20px; box-shadow: 0px 0px 15px rgba(0, 242, 255, 0.1);
         }
-        /* Tactical Dossier Box CSS */
         .dossier-header {
             background-color: #00f2ff; color: #000; padding: 5px 15px; font-weight: bold;
             font-size: 11px; border-radius: 5px 5px 0 0; letter-spacing: 1.5px; display: inline-block;
         }
         .dossier-box {
-            background: rgba(25, 27, 32, 0.95) !important; /* Lighter contrast from sidebar */
+            background: rgba(25, 27, 32, 0.95) !important;
             border: 1px solid #00f2ff !important;
             border-radius: 0 5px 5px 5px; padding: 10px; margin-bottom: 20px;
-            box-shadow: inset 0px 0px 10px rgba(0, 242, 255, 0.1);
         }
         section[data-testid="stSidebar"] .stTextArea textarea {
             background-color: transparent !important; border: none !important; color: #00f2ff !important;
@@ -151,7 +150,7 @@ else:
         </style>
         """, unsafe_allow_html=True)
 
-# --- APP FLOW ---
+# --- LOGIN FLOW ---
 if not st.session_state["logged_in"]:
     st.markdown("<br><h1 style='text-align:center;'>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
@@ -187,31 +186,29 @@ else:
     
     model = get_model()
 
-    # --- SIDEBAR WITH DOSSIER BOX ---
+    # --- SIDEBAR WITH LIVE TIME ---
     with st.sidebar:
         st.markdown(f"""
             <div style="background: rgba(0, 242, 255, 0.05); padding: 20px; border-radius: 10px; border: 1px solid #00f2ff; margin-bottom: 25px;">
                 <h4 style="margin:0; font-size: 14px; opacity: 0.8;">OPERATIVE STATUS</h4>
                 <h2 style="margin:0; color: #00f2ff; font-size: 22px;">⚡ {st.session_state['user'].upper()}</h2>
-                <p style="margin:5px 0 0 0; font-size: 10px; color: #00f2ff;">LOCATION: NAGPUR_MS_IN</p>
+                <p style="margin:5px 0 0 0; font-size: 11px; color: #00f2ff;">
+                    🕒 SYSTEM TIME: {get_timestamp()}<br>
+                    📍 LOCATION: NAGPUR_MS_IN
+                </p>
             </div>
         """, unsafe_allow_html=True)
         st.markdown("### 📂 CASE MANAGEMENT")
         case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
         st.markdown("---")
-        
-        # High-Contrast Dossier Box
-        st.markdown('<div class="dossier-header">📝 INVESTIGATION LOG</div>', unsafe_allow_html=True)
-        st.markdown('<div class="dossier-box">', unsafe_allow_html=True)
+        st.markdown('<div class="dossier-header">📝 INVESTIGATION LOG</div><div class="dossier-box">', unsafe_allow_html=True)
         case_notes = st.text_area("FIELD NOTES", height=250, label_visibility="collapsed")
         st.markdown('</div>', unsafe_allow_html=True)
-        
         if st.button("🔴 EXIT SYSTEM"):
             st.session_state["logged_in"] = False; st.rerun()
 
     st.markdown("<h1>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
     
-    # Access control for sanskar
     if st.session_state["user"].lower() == "sanskar":
         tab_main, tab_admin = st.tabs(["🔍 INVESTIGATION", "📊 ADMIN CONSOLE"])
     else: tab_main, tab_admin = st.container(), None
@@ -222,7 +219,7 @@ else:
             st.markdown("### 🧬 SIDE-BY-SIDE COMPARISON")
             for f in files:
                 f_hash = get_file_hash(f.getvalue())
-                st.info(f"🧬 EXHIBIT {f.name} Fingerprint: {f_hash}")
+                st.info(f"🧬 EXHIBIT {f.name} | LOGGED: {get_timestamp()} | HASH: {f_hash}")
                 ela_img = convert_to_ela_image(f, quality=90)
                 heat_img = generate_heatmap(f.getvalue(), ela_img)
                 c_o, c_h = st.columns(2)
