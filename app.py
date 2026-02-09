@@ -22,8 +22,17 @@ if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 if "user" not in st.session_state:
     st.session_state["user"] = "Unknown"
+if "case_log" not in st.session_state:
+    st.session_state["case_log"] = []
 
 # --- CORE UTILITIES ---
+def get_timestamp():
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+def log_forensic_action(action):
+    entry = f"[{get_timestamp()}] {action}"
+    st.session_state["case_log"].append(entry)
+
 def get_file_hash(file_bytes):
     return hashlib.sha256(file_bytes).hexdigest()
 
@@ -111,9 +120,11 @@ if not st.session_state["logged_in"]:
         if st.button("AUTHORIZE"):
             if check_user(u_in, p_in):
                 st.session_state["logged_in"], st.session_state["user"] = True, u_in.strip()
+                log_forensic_action(f"Agent {u_in.upper()} authorized session.")
                 st.rerun()
         st.markdown('</div>', unsafe_allow_html=True)
 else:
+    # --- TOP NAVBAR WITH LARGE WORKING CLOCK ---
     col_title, col_clock = st.columns([2, 1])
     with col_title:
         st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Investigation Suite</h2>', unsafe_allow_html=True)
@@ -129,7 +140,6 @@ else:
     model = get_model()
 
     with st.sidebar:
-        # INCREASED LOCATION FONT SIZE IN STATUS CARD
         st.markdown(f"""
             <div style="background: rgba(0, 242, 255, 0.05); padding: 20px; border-radius: 10px; border: 1px solid #00f2ff; margin-bottom: 25px;">
                 <h4 style="margin:0; font-size: 14px; opacity: 0.8;">OPERATIVE STATUS</h4>
@@ -137,11 +147,19 @@ else:
                 <p style="margin:10px 0 0 0; font-size: 14px; color: #00f2ff; font-weight: bold;">📍 LOCATION: NAGPUR_MS_IN</p>
             </div>
         """, unsafe_allow_html=True)
+        
+        st.markdown("### 📜 SESSION LOG")
+        with st.expander("Chain of Custody", expanded=False):
+            for entry in st.session_state["case_log"]:
+                st.text(entry)
+
         case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
         st.markdown('<div class="dossier-header">📝 INVESTIGATION LOG</div><div class="dossier-box">', unsafe_allow_html=True)
-        case_notes = st.text_area("FIELD NOTES", height=250, label_visibility="collapsed")
+        case_notes = st.text_area("FIELD NOTES", height=200, label_visibility="collapsed")
         st.markdown('</div>', unsafe_allow_html=True)
+        
         if st.button("🔴 EXIT SYSTEM"):
+            log_forensic_action("Session terminated by agent.")
             st.session_state["logged_in"] = False; st.rerun()
 
     st.markdown("---")
@@ -150,6 +168,7 @@ else:
     if files:
         for f in files:
             f_hash = get_file_hash(f.getvalue())
+            log_forensic_action(f"Exhibit {f.name} uploaded. Hash: {f_hash}")
             st.info(f"🧬 EXHIBIT {f.name} | HASH: {f_hash}")
             ela_img = convert_to_ela_image(f, quality=90)
             heat_img = generate_heatmap(f.getvalue(), ela_img)
@@ -157,6 +176,7 @@ else:
             with c_o: st.image(f, caption="SOURCE")
             with c_h: st.image(heat_img, caption="HEATMAP")
 
+    # --- LIVE CLOCK UPDATE LOOP (INCREASED FONT SIZE) ---
     while st.session_state["logged_in"]:
         now = datetime.now()
         clock_placeholder.markdown(f"""
