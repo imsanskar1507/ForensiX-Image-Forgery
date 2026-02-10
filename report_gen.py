@@ -21,7 +21,8 @@ def create_pdf_report(results_list, case_notes=""):
     pdf = ForensicReport()
     pdf.add_page()
     pdf.set_font("Courier", size=11)
-    # Timestamped Evidence Logging
+    
+    # Header Information
     pdf.cell(0, 10, txt=f"GENERATED: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True)
     pdf.cell(0, 10, txt=f"OFFICE: NAGPUR_MS_IN", ln=True)
     pdf.ln(5)
@@ -40,11 +41,14 @@ def create_pdf_report(results_list, case_notes=""):
         pdf.ln(5)
         pdf.set_font("Courier", 'B', 12)
         pdf.cell(0, 8, txt=f"EXHIBIT: {clean_text(res['FILENAME'])}", ln=True)
-        # Fix: Extract percentage string without re-formatting as float
+        
+        # FIX: Remove formatting tags and handle as string
         v_clean = res['VERDICT'].replace("🚩 ", "").replace("🏳️ ", "")
         conf_val = res['CONFIDENCE'] 
+        
         pdf.set_font("Courier", size=10)
         pdf.cell(0, 6, txt=f"VERDICT: {v_clean} | AI CONFIDENCE: {conf_val}", ln=True)
-        pdf.multi_cell(0, 6, txt=f"DATA: {clean_text(res['METADATA'])}")
+        pdf.multi_cell(0, 6, txt=f"METADATA: {clean_text(res['METADATA'])}")
         pdf.ln(5)
+    
     return pdf.output(dest='S').encode('latin-1')
