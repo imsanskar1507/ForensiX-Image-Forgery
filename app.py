@@ -111,6 +111,11 @@ if not st.session_state["logged_in"]:
             background: rgba(15, 17, 22, 0.75) !important; backdrop-filter: blur(15px);
             border: 2px solid #00f2ff; border-radius: 15px; padding: 25px;
         }
+        /* CRITICAL: Removes the default Streamlit form border to keep your UI identical */
+        [data-testid="stForm"] {
+            border: none !important;
+            padding: 0 !important;
+        }
         </style>
         """, unsafe_allow_html=True)
 else:
@@ -140,13 +145,20 @@ if not st.session_state["logged_in"]:
     col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
     with col_l2:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
-        u_in = st.text_input("AGENT ID")
-        p_in = st.text_input("ACCESS KEY", type="password")
-        if st.button("AUTHORIZE"):
-            if check_user(u_in, p_in):
-                st.session_state["logged_in"], st.session_state["user"] = True, u_in.strip()
-                log_forensic_action(f"Agent {u_in.upper()} authorized.")
-                st.rerun()
+        # Using st.form allows the "Enter" key to trigger the login
+        with st.form("login_gate"):
+            u_in = st.text_input("AGENT ID")
+            p_in = st.text_input("ACCESS KEY", type="password")
+            # The button must be st.form_submit_button to catch the Enter key
+            submitted = st.form_submit_button("AUTHORIZE", use_container_width=True)
+            
+            if submitted:
+                if check_user(u_in, p_in):
+                    st.session_state["logged_in"], st.session_state["user"] = True, u_in.strip()
+                    log_forensic_action(f"Agent {u_in.upper()} authorized.")
+                    st.rerun()
+                else:
+                    st.error("Invalid Credentials")
         st.markdown('</div>', unsafe_allow_html=True)
 else:
     # --- NAV BAR WITH LARGE AUTOMATED IST CLOCK ---
