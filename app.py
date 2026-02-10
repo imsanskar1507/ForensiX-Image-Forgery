@@ -86,6 +86,15 @@ def init_db():
     conn.commit()
     conn.close()
 
+def check_user(u, p):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    hp = hashlib.sha256(p.encode()).hexdigest()
+    c.execute("SELECT * FROM users WHERE username=? AND password=?", (u.lower().strip(), hp))
+    res = c.fetchone()
+    conn.close()
+    return res
+
 init_db()
 
 # --- CSS STYLING ---
@@ -109,55 +118,52 @@ else:
         <style>
         .stApp { background-color: #0a0b0d; color: #00f2ff; font-family: 'Courier New', monospace; }
         section[data-testid="stSidebar"] { background-color: #0f1116 !important; border-right: 1px solid #00f2ff; }
-        .dossier-box { background: rgba(25, 27, 32, 0.95) !important; border: 1px solid #00f2ff !important; padding: 10px; }
+        .dossier-box { background: rgba(25, 27, 32, 0.95) !important; border: 1px solid #00f2ff !important; border-radius: 0 5px 5px 5px; padding: 10px; }
         </style>
         """, unsafe_allow_html=True)
 
 # --- APP FLOW ---
 if not st.session_state["logged_in"]:
     st.markdown("<br><h1 style='text-align:center;'>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
-    _, col_auth, _ = st.columns([1, 2, 1])
-    with col_auth:
+    col_l1, col_l2, col_l3 = st.columns([1, 2, 1])
+    with col_l2:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
         if st.session_state["auth_mode"] == "login":
             with st.form("login_gate"):
                 u_in = st.text_input("AGENT ID")
                 p_in = st.text_input("ACCESS KEY", type="password")
                 if st.form_submit_button("AUTHORIZE", use_container_width=True):
-                    hp = hashlib.sha256(p_in.encode()).hexdigest()
-                    conn = sqlite3.connect('users.db')
-                    c = conn.cursor()
-                    c.execute("SELECT * FROM users WHERE username=? AND password=?", (u_in.lower().strip(), hp))
-                    if c.fetchone():
+                    if check_user(u_in, p_in):
                         st.session_state["logged_in"], st.session_state["user"] = True, u_in.strip()
                         log_forensic_action(f"Agent {u_in.upper()} authorized.")
                         st.rerun()
                     else: st.error("Invalid Credentials")
-                    conn.close()
             c1, c2 = st.columns(2)
-            if c1.button("Enroll New Agent"): st.session_state["auth_mode"] = "register"; st.rerun()
-            if c2.button("Forgot Key"): st.session_state["auth_mode"] = "forgot"; st.rerun()
-        # ... (Registration and Forgot logic remains the same as previous version) ...
+            if c1.button("Register"): st.session_state["auth_mode"] = "register"; st.rerun()
+            if c2.button("Forgot"): st.session_state["auth_mode"] = "forgot"; st.rerun()
+        # (Registration and Forgot logic remains same as your original...)
         st.markdown('</div>', unsafe_allow_html=True)
 else:
-    col_t, col_c = st.columns([2, 1])
-    with col_t: st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Investigation Suite</h2>', unsafe_allow_html=True)
-    with col_c: clock_placeholder = st.empty()
+    col_title, col_clock = st.columns([2, 1])
+    with col_title: st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Investigation Suite</h2>', unsafe_allow_html=True)
+    with col_clock: clock_placeholder = st.empty()
 
     @st.cache_resource
     def get_model():
         mp = os.path.join(os.path.dirname(__file__), 'forgery_detector.h5')
         return load_model(mp) if os.path.exists(mp) else None
+    
     model = get_model()
 
     with st.sidebar:
-        st.markdown(f"**⚡ {st.session_state['user'].upper()} | NAGPUR**")
+        st.markdown(f"**⚡ AGENT: {st.session_state['user'].upper()}**")
         case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
         case_notes = st.text_area("FIELD NOTES", height=150)
         if st.button("🔴 EXIT"): st.session_state["logged_in"] = False; st.rerun()
 
-    files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
+    st.markdown("---")
     
+    files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
     if files:
         for f in files:
             f_hash = get_file_hash(f.getvalue())
@@ -167,58 +173,58 @@ else:
             heat_img = generate_heatmap(f.getvalue(), ela_img)
             with c_o: st.image(f, caption="SOURCE EVIDENCE")
             with c_h: st.image(heat_img, caption="HEATMAP ANALYSIS")
+            
+            c_l, c_p = st.columns(2)
+            with c_l: st.image(generate_luminance_map(f), caption="LUMINANCE GRADIENT")
+            with c_p: st.pyplot(plot_histogram(f))
 
+        # --- REPAIRED DEEP SCAN LOGIC ---
         if st.button("INITIATE DEEP SCAN"):
-            results_data = []
-            progress_bar = st.progress(0)
+            results, zip_buffer = [], io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zf:
+                bar = st.progress(0)
+                with st.status("📡 ANALYZING...", expanded=True) as status:
+                    for idx, f in enumerate(files):
+                        # 1. Save temp file for metadata/processing
+                        tmp = f"temp_{f.name}"
+                        with open(tmp, "wb") as b: b.write(f.getbuffer())
+                        
+                        # 2. Run Metadata Scan
+                        has_meta, m_msg = scan_metadata(tmp)
+                        
+                        # 3. Run CNN Prediction
+                        proc = prepare_image_for_cnn(tmp)
+                        pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
+                        os.remove(tmp)
+                        
+                        # 4. Store Results
+                        v = "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN"
+                        conf = float(max(pred, 1-pred)*100)
+                        results.append({
+                            "FILENAME": f.name, 
+                            "VERDICT": v, 
+                            "CONFIDENCE": f"{conf:.2f}%", 
+                            "METADATA": "DETECTED" if has_meta else "NONE"
+                        })
+                        bar.progress((idx+1)/len(files))
+                    
+                    # 5. Generate PDF Report
+                    pdf_data = create_pdf_report(results, case_notes=case_notes)
+                    zf.writestr(f"Forensic_Report_{case_id}.pdf", pdf_data)
+                    status.update(label="SCAN COMPLETE", state="complete")
             
-            with st.status("📡 Analyzing Evidence...", expanded=True) as status:
-                for idx, f in enumerate(files):
-                    # 1. Save temp for processing
-                    temp_path = f"temp_{f.name}"
-                    with open(temp_path, "wb") as b:
-                        b.write(f.getbuffer())
-                    
-                    # 2. Metadata Scan
-                    _, m_text = scan_metadata(temp_path)
-                    
-                    # 3. AI Prediction
-                    proc_img = prepare_image_for_cnn(temp_path)
-                    prediction = model.predict(np.expand_dims(proc_img, axis=0))[0][0]
-                    
-                    # 4. Cleanup
-                    os.remove(temp_path)
-                    
-                    # 5. Store Data
-                    verdict = "🚩 FORGERY" if prediction > 0.5 else "🏳️ CLEAN"
-                    conf = float(max(prediction, 1 - prediction) * 100)
-                    
-                    results_data.append({
-                        "FILENAME": f.name,
-                        "VERDICT": verdict,
-                        "CONFIDENCE": f"{conf:.2f}%",
-                        "METADATA_TRACES": m_text[:50] + "..." if len(m_text) > 50 else m_text
-                    })
-                    progress_bar.progress((idx + 1) / len(files))
-                
-                status.update(label="Analysis Complete", state="complete")
+            # 6. DISPLAY ANALYZED DATA TABLE
+            st.markdown("### 📊 FINAL DETERMINATION SUMMARY")
+            st.table(pd.DataFrame(results))
+            st.download_button("📥 DOWNLOAD CASE DOSSIER (.ZIP)", zip_buffer.getvalue(), f"CASE_{case_id}.zip")
 
-            # --- DISPLAY THE ANALYZED DATA ---
-            st.markdown("### 📊 INVESTIGATION RESULTS")
-            df = pd.DataFrame(results_data)
-            st.dataframe(df, use_container_width=True, hide_index=True)
-            
-            # Generate Report
-            pdf_bytes = create_pdf_report(results_data, case_notes=case_notes)
-            st.download_button("📥 DOWNLOAD CASE DOSSIER (PDF)", pdf_bytes, f"Case_{case_id}.pdf")
-
-    @st.fragment(run_every="1s")
-    def sync_clock():
+    # --- CLOCK REFRESH ---
+    while st.session_state["logged_in"]:
         now = datetime.now(IST)
         clock_placeholder.markdown(f"""
             <div style="text-align: right; background: rgba(0, 242, 255, 0.1); padding: 5px 15px; border-radius: 5px; border-left: 3px solid #00f2ff;">
                 <span style="color: #00f2ff; font-size: 16px; font-weight: bold;">{now.strftime('%d %b %Y')}</span><br>
-                <span style="color: #ffffff; font-size: 24px;">{now.strftime('%I:%M:%S %p')}</span>
+                <span style="color: #ffffff; font-size: 24px; font-family: 'Courier New';">{now.strftime('%I:%M:%S %p')}</span>
             </div>
         """, unsafe_allow_html=True)
-    sync_clock()
+        time.sleep(1)
