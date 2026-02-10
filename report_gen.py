@@ -8,10 +8,11 @@ class ForensicReport(FPDF):
         self.rect(0, 0, 210, 40, 'F')
         self.set_font('Courier', 'B', 18)
         self.set_text_color(0, 242, 255) 
-        self.cell(0, 20, 'ForensiX-Image Forgery Detector', 0, 1, 'C')
+        self.cell(0, 20, 'ForensiX - Official Case Report', 0, 1, 'C')
         self.ln(10)
 
 def clean_text(text):
+    """Prevents UnicodeEncodeError by stripping non-Latin-1 characters."""
     if not text: return ""
     text = re.sub(r'[^\x20-\x7E]+', ' ', str(text)) 
     return text.encode('latin-1', 'ignore').decode('latin-1')
@@ -20,13 +21,14 @@ def create_pdf_report(results_list, case_notes=""):
     pdf = ForensicReport()
     pdf.add_page()
     pdf.set_font("Courier", size=11)
+    # Timestamped Evidence Logging
     pdf.cell(0, 10, txt=f"GENERATED: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=True)
-    pdf.cell(0, 10, txt=f"LOCATION: NAGPUR_MS_IN", ln=True)
+    pdf.cell(0, 10, txt=f"OFFICE: NAGPUR_MS_IN", ln=True)
     pdf.ln(5)
     
     pdf.set_font("Courier", 'B', 14)
     pdf.set_text_color(139, 0, 0)
-    pdf.cell(0, 10, txt="OFFICIAL INVESTIGATOR CONCLUSION:", ln=True)
+    pdf.cell(0, 10, txt="INVESTIGATOR CONCLUSION:", ln=True)
     pdf.set_font("Courier", size=10)
     pdf.set_text_color(0, 0, 0)
     pdf.multi_cell(0, 6, txt=clean_text(case_notes))
@@ -38,9 +40,11 @@ def create_pdf_report(results_list, case_notes=""):
         pdf.ln(5)
         pdf.set_font("Courier", 'B', 12)
         pdf.cell(0, 8, txt=f"EXHIBIT: {clean_text(res['FILENAME'])}", ln=True)
+        # Fix: Extract percentage string without re-formatting as float
         v_clean = res['VERDICT'].replace("🚩 ", "").replace("🏳️ ", "")
+        conf_val = res['CONFIDENCE'] 
         pdf.set_font("Courier", size=10)
-        pdf.cell(0, 6, txt=f"VERDICT: {v_clean} | AI CONFIDENCE: {res['CONFIDENCE']:.2f}%", ln=True)
-        pdf.multi_cell(0, 6, txt=f"FORENSIC TRACE: {clean_text(res['METADATA'])}")
+        pdf.cell(0, 6, txt=f"VERDICT: {v_clean} | AI CONFIDENCE: {conf_val}", ln=True)
+        pdf.multi_cell(0, 6, txt=f"DATA: {clean_text(res['METADATA'])}")
         pdf.ln(5)
     return pdf.output(dest='S').encode('latin-1')
