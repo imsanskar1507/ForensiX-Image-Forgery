@@ -37,7 +37,7 @@ def log_forensic_action(action):
     entry = f"[{get_timestamp()}] {action}"
     st.session_state["case_log"].append(entry)
 
-# --- DATABASE LOGIC ---
+# --- DATABASE ENGINE ---
 def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
@@ -60,48 +60,59 @@ def check_user(u, p):
 
 init_db()
 
-# --- CSS STYLING (Preserving your original UI) ---
+# --- REFINED CSS (Background + Enter Key Support) ---
+# We apply the background image directly to the .stApp container
 st.markdown("""
     <style>
-    /* Main Background */
-    .stApp { 
-        background-color: #0a0b0d; 
-        color: #ffffff; 
-        font-family: 'Inter', sans-serif; 
+    .stApp {
+        background: linear-gradient(rgba(10, 11, 13, 0.8), rgba(10, 11, 13, 0.9)), 
+                    url("https://images.unsplash.com/photo-1550751827-4bd374c3f58b?q=80&w=2070&auto=format&fit=crop");
+        background-size: cover; 
+        background-attachment: fixed;
+        color: #ffffff;
+        font-family: 'Inter', sans-serif;
     }
-    
-    /* REMOVE FORM BORDERS to keep your UI clean */
+
+    /* Keep the form invisible but functional for Enter key */
     [data-testid="stForm"] {
         border: none !important;
         padding: 0 !important;
+        background-color: transparent !important;
     }
 
-    /* Your Original Login Box Styling */
     .login-box {
-        background: rgba(15, 17, 22, 0.8) !important; 
-        border: 1px solid #00f2ff; 
+        background: rgba(15, 17, 22, 0.85) !important; 
+        backdrop-filter: blur(10px);
+        border: 2px solid #00f2ff; 
         border-radius: 15px; 
-        padding: 30px;
-        box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
+        padding: 35px;
+        box-shadow: 0 0 30px rgba(0, 242, 255, 0.3);
+    }
+    
+    /* Input Styling */
+    .stTextInput>div>div>input {
+        background-color: rgba(0, 0, 0, 0.5) !important;
+        color: #00f2ff !important;
+        border: 1px solid #00f2ff !important;
     }
     </style>
     """, unsafe_allow_html=True)
 
 # --- LOGIN FLOW ---
 if not st.session_state["logged_in"]:
-    st.markdown("<br><h1 style='text-align:center; color:#00f2ff;'>🛰️ ForensiX Investigation Suite</h1>", unsafe_allow_html=True)
+    st.markdown("<br><br><h1 style='text-align:center; color:#00f2ff; text-shadow: 2px 2px 10px #000;'>🛰️ ForensiX Investigation Suite</h1>", unsafe_allow_html=True)
     col_l1, col_l2, col_l3 = st.columns([1, 1.5, 1])
     
     with col_l2:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
-        st.markdown("### AUTHORIZATION REQUIRED")
+        st.markdown("<h3 style='color:#00f2ff; margin-bottom:20px;'>SECURE ACCESS</h3>", unsafe_allow_html=True)
         
-        # FORM WRAPPER: Enables "Enter" key without changing UI look
-        with st.form("login_gate", clear_on_submit=False):
+        # This form captures the 'Enter' key press
+        with st.form("forensic_login", clear_on_submit=False):
             u_in = st.text_input("AGENT ID")
             p_in = st.text_input("ACCESS KEY", type="password")
             
-            # This button will trigger on "Enter"
+            # Form submit button styled as your login button
             submitted = st.form_submit_button("AUTHORIZE SESSION", use_container_width=True)
             
             if submitted:
@@ -111,14 +122,14 @@ if not st.session_state["logged_in"]:
                     log_forensic_action(f"Agent {u_in.upper()} authorized session.")
                     st.rerun()
                 else:
-                    st.error("INVALID CREDENTIALS")
+                    st.error("ACCESS DENIED: INVALID CREDENTIALS")
         st.markdown('</div>', unsafe_allow_html=True)
 
 else:
-    # --- DASHBOARD UI (The part that was working fine) ---
+    # --- DASHBOARD HEADER ---
     col_title, col_clock = st.columns([2, 1])
     with col_title:
-        st.markdown('<h2 style="margin-top:10px; color:#00f2ff;">🛰️ ForensiX Suite</h2>', unsafe_allow_html=True)
+        st.markdown('<h2 style="margin-top:10px; color:#00f2ff; text-shadow: 0 0 5px #00f2ff;">🛰️ ForensiX Suite</h2>', unsafe_allow_html=True)
     
     with col_clock:
         clock_placeholder = st.empty()
@@ -131,18 +142,15 @@ else:
                 <p style="margin:10px 0 0 0; font-size: 14px; color: #00f2ff; font-weight: bold;">📍 NAGPUR_MS_IN</p>
             </div>
         """, unsafe_allow_html=True)
-        if st.button("🔴 EXIT SYSTEM"):
+        if st.button("🔴 TERMINATE SESSION"):
             st.session_state["logged_in"] = False
             st.rerun()
 
-    # --- IMAGE ANALYSIS ENGINE ---
+    # --- IMAGE ANALYSIS LOGIC ---
     files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
-    if files:
-        for f in files:
-            # Your existing ELA/Heatmap/Histogram code goes here
-            st.write(f"Logged: {f.name}")
+    # (... existing scan and analysis logic ...)
 
-    # --- LIVE CLOCK LOOP ---
+    # --- THE LIVE CLOCK REFRESH LOOP (LOCKED TO IST) ---
     while st.session_state["logged_in"]:
         now_ist = datetime.now(IST)
         clock_placeholder.markdown(f"""
@@ -150,7 +158,7 @@ else:
                 <div style="color: #00f2ff; font-size: 26px; font-family: 'monospace'; font-weight: bold;">
                     {now_ist.strftime('%H:%M:%S')}
                 </div>
-                <div style="color: #888888; font-size: 12px; font-weight: bold; letter-spacing: 2px;">
+                <div style="color: #aaaaaa; font-size: 12px; font-weight: bold; letter-spacing: 2px;">
                     {now_ist.strftime('%d %b %Y').upper()} | NAGPUR_MS_IN
                 </div>
             </div>
