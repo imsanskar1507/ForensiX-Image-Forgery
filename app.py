@@ -17,28 +17,6 @@ from metadata_scanner import scan_metadata
 from tensorflow.python.keras.models import load_model
 from report_gen import create_pdf_report 
 
-# --- NEW UTILITY FOR AI DETECTION ---
-def detect_ai_generated_patterns(image_path):
-    """Analyses frequency artifacts typical of GAN/Diffusion generated images."""
-    try:
-        img = cv2.imread(image_path, 0)
-        f = np.fft.fft2(img)
-        fshift = np.fft.fftshift(f)
-        magnitude_spectrum = 20 * np.log(np.abs(fshift) + 1)
-        
-        # Calculate variance in high-frequency regions
-        h, w = magnitude_spectrum.shape
-        center_h, center_w = h // 2, w // 2
-        # Mask center (low frequency)
-        magnitude_spectrum[center_h-30:center_h+30, center_w-30:center_w+30] = 0
-        score = np.var(magnitude_spectrum)
-        
-        if score > 120: return f"{min(98.9, score/1.5):.1f}%", "High (Synthetic)"
-        elif score > 70: return f"{score/1.8:.1f}%", "Possible AI"
-        else: return f"{score/4:.1f}%", "Low (Natural)"
-    except:
-        return "0.0%", "Scan Error"
-
 # --- INITIAL CONFIG ---
 st.set_page_config(page_title="ForensiX-Image Forgery Detector", layout="wide", page_icon="🕵️")
 
@@ -296,24 +274,12 @@ else:
                     for idx, f in enumerate(files):
                         tmp = f"temp_{f.name}"
                         with open(tmp, "wb") as b: b.write(f.getbuffer())
-                        
-                        # --- INTEGRATED AI/DEEPFAKE SCAN ---
-                        ai_conf, ai_risk = detect_ai_generated_patterns(tmp)
-                        
                         has_meta, m_msg = scan_metadata(tmp)
                         proc = prepare_image_for_cnn(tmp)
                         pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
                         os.remove(tmp)
-                        
                         v = "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN"
-                        results.append({
-                            "FILENAME": f.name, 
-                            "FORGERY": v, 
-                            "CNN CONF.": f"{max(pred, 1-pred)*100:.2f}%", 
-                            "AI/DEEPFAKE": ai_conf,
-                            "RISK": ai_risk,
-                            "METADATA": "DETECTED" if has_meta else "NONE"
-                        })
+                        results.append({"FILENAME": f.name, "VERDICT": v, "CONFIDENCE": f"{max(pred, 1-pred)*100:.2f}%", "METADATA": "DETECTED" if has_meta else "NONE"})
                         bar.progress((idx+1)/len(files))
                     
                     pdf_data = create_pdf_report(results, case_notes=case_notes)
@@ -339,7 +305,7 @@ else:
             )
             st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- THE LIVE CLOCK REFRESH LOOP ---
+    # --- THE LIVE CLOCK REFRESH LOOP (LOCKED TO IST) ---
     while st.session_state["logged_in"]:
         now = datetime.now(IST)
         clock_placeholder.markdown(f"""
