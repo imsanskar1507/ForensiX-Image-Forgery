@@ -18,7 +18,8 @@ from tensorflow.keras.models import load_model
 from report_gen import create_pdf_report 
 
 # --- INITIAL CONFIG ---
-st.set_page_config(page_title="ForensiX-Image Forgery Detector", layout="wide", page_icon="🕵️")
+# Title updated to ForensiX Image Forgery Detector
+st.set_page_config(page_title="ForensiX Image Forgery Detector", layout="wide", page_icon="🕵️")
 IST = pytz.timezone('Asia/Kolkata')
 
 # Session State Initialization
@@ -57,12 +58,6 @@ def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, recovery TEXT)')
-    # Ensure default agent exists
-    c.execute("SELECT * FROM users WHERE username='sanskar'")
-    if not c.fetchone():
-        hp = hashlib.sha256("detective2026".encode()).hexdigest()
-        hr = hashlib.sha256("nagpur".encode()).hexdigest()
-        c.execute("INSERT INTO users VALUES (?, ?, ?)", ("sanskar", hp, hr))
     conn.commit(); conn.close()
 
 def check_user(u, p):
@@ -105,7 +100,8 @@ else:
 
 # --- APP LOGIC ---
 if not st.session_state["logged_in"]:
-    st.markdown("<br><h1 style='text-align:center;'>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
+    # Name updated on Login Page
+    st.markdown("<br><h1 style='text-align:center;'>🛰️ ForensiX Image Forgery Detector</h1>", unsafe_allow_html=True)
     _, col_auth, _ = st.columns([1, 2, 1])
     with col_auth:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
@@ -146,7 +142,9 @@ if not st.session_state["logged_in"]:
 else:
     # --- MAIN INVESTIGATION DASHBOARD ---
     col_title, col_clock = st.columns([2, 1])
-    with col_title: st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Investigation Suite</h2>', unsafe_allow_html=True)
+    with col_title: 
+        # Name updated on Dashboard
+        st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Image Forgery Detector</h2>', unsafe_allow_html=True)
     with col_clock: clock_placeholder = st.empty()
 
     @st.cache_resource
