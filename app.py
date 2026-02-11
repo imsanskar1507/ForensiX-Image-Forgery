@@ -52,6 +52,22 @@ def generate_heatmap(original_img_bytes, ela_img):
     heatmap_resized = cv2.resize(heatmap_color, (width, height))
     return cv2.addWeighted(original, 0.6, heatmap_resized, 0.4, 0)
 
+# --- NEW: FORGERY TYPE CLASSIFIER ---
+def classify_forgery_type(ela_img):
+    """Analyzes ELA pixel intensity to suspect forgery technique."""
+    ela_array = np.array(ela_img.convert('L'))
+    # Thresholding high-intensity error regions (outliers) [cite: 231]
+    high_error_pixels = np.count_nonzero(ela_array > 40)
+    total_pixels = ela_array.size
+    density = high_error_pixels / total_pixels
+
+    if density > 0.15:
+        return "🚩 Splicing (Heavy Manipulation)"
+    elif 0.05 < density <= 0.15:
+        return "🚩 Copy-Move (Localized Artifacts)"
+    else:
+        return "🏳️ Standard Compression"
+
 # --- DATABASE ENGINE ---
 def init_db():
     conn = sqlite3.connect('users.db')
@@ -203,25 +219,31 @@ else:
             zip_out = io.BytesIO()
             with zipfile.ZipFile(zip_out, "a", zipfile.ZIP_DEFLATED, False) as zf:
                 bar = st.progress(0)
-                with st.status("📡 SCANNING...") as status:
+                with st.status("📡 SCANNING PIXELS...") as status:
                     for idx, f in enumerate(files):
                         tmp = f"temp_{f.name}"
                         with open(tmp, "wb") as b: b.write(f.getbuffer())
                         
-                        # --- ENHANCED METADATA SCAN ---
+                        # 1. ENHANCED METADATA SCAN
                         has_meta, meta_info = scan_metadata(tmp)
-                        # Specific check for editing software
                         software_tag = "🏳️ ORIGINAL"
                         software_list = ["Adobe Photoshop", "Canva", "GIMP", "PicsArt", "Lightroom"]
                         if has_meta and any(s.lower() in str(meta_info).lower() for s in software_list):
                             software_tag = "🚩 EDITED (Software Tags Found)"
                         
+                        # 2. SUSPECTED FORGERY TYPE (BY ELA DENSITY)
+                        ela_img = convert_to_ela_image(f, quality=90)
+                        forgery_type = classify_forgery_type(ela_img)
+                        
+                        # 3. CNN PREDICTION
                         proc = prepare_image_for_cnn(tmp)
                         pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
                         os.remove(tmp)
+
                         results.append({
                             "FILENAME": f.name, 
                             "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN", 
+                            "FORGERY TYPE": forgery_type,
                             "CNN CONF.": f"{max(pred, 1-pred)*100:.2f}%", 
                             "METADATA": software_tag
                         })
