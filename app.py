@@ -18,7 +18,6 @@ from tensorflow.keras.models import load_model
 from report_gen import create_pdf_report 
 
 # --- INITIAL CONFIG ---
-# Rebranding the page title
 st.set_page_config(page_title="ForensiX-Image Forgery Detector", layout="wide", page_icon="🕵️")
 IST = pytz.timezone('Asia/Kolkata')
 
@@ -91,8 +90,7 @@ else:
 
 # --- APP LOGIC ---
 if not st.session_state["logged_in"]:
-    # Using the rebranded name in the login header
-    st.markdown("<br><h1 style='text-align:center;'>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
+    st.markdown("<br><h1 style='text-align:center;'>🛰️ ForensiX Investigation Portal</h1>", unsafe_allow_html=True)
     _, col_auth, _ = st.columns([1, 2, 1])
     with col_auth:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
@@ -111,9 +109,7 @@ if not st.session_state["logged_in"]:
 else:
     # --- MAIN INVESTIGATION DASHBOARD ---
     col_title, col_clock = st.columns([2, 1])
-    with col_title: 
-        # Using the rebranded name in the main dashboard
-        st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Investigation Suite</h2>', unsafe_allow_html=True)
+    with col_title: st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Investigation Suite</h2>', unsafe_allow_html=True)
     with col_clock: clock_placeholder = st.empty()
 
     @st.cache_resource
