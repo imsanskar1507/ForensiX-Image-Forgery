@@ -52,26 +52,6 @@ def generate_heatmap(original_img_bytes, ela_img):
     heatmap_resized = cv2.resize(heatmap_color, (width, height))
     return cv2.addWeighted(original, 0.6, heatmap_resized, 0.4, 0)
 
-def generate_luminance_map(file):
-    img = Image.open(file).convert('L')
-    img_array = np.array(img, dtype=float)
-    dx, dy = np.gradient(img_array)
-    gradient = np.sqrt(dx**2 + dy**2)
-    gradient = (gradient / (gradient.max() if gradient.max() > 0 else 1) * 255).astype(np.uint8)
-    return cv2.applyColorMap(gradient, cv2.COLORMAP_VIRIDIS)
-
-def plot_histogram(file):
-    img = Image.open(file).convert('RGB')
-    img_array = np.array(img)
-    fig, ax = plt.subplots(figsize=(10, 3))
-    for i, col in enumerate(['red', 'green', 'blue']):
-        hist = cv2.calcHist([img_array], [i], None, [256], [0, 256])
-        ax.plot(hist, color=col, alpha=0.7)
-    ax.set_facecolor('#0f1116')
-    fig.patch.set_facecolor('#0a0b0d')
-    ax.tick_params(colors='#00f2ff', labelsize=8)
-    return fig
-
 # --- DATABASE ENGINE ---
 def init_db():
     conn = sqlite3.connect('users.db')
@@ -119,7 +99,6 @@ if not st.session_state["logged_in"]:
                 u_in = st.text_input("AGENT ID")
                 p_in = st.text_input("ACCESS KEY", type="password")
                 if st.form_submit_button("AUTHORIZE", use_container_width=True):
-                    # Simple Check (You can restore your full DB check here)
                     if u_in == "sanskar" or u_in == "admin":
                         st.session_state["logged_in"], st.session_state["user"] = True, u_in.strip()
                         log_forensic_action(f"Agent {u_in.upper()} authorized.")
@@ -137,7 +116,7 @@ else:
     def get_model():
         mp = 'forgery_detector.h5'
         if os.path.exists(mp) and os.path.getsize(mp) > 2000:
-            return load_model(mp, compile=False) # STABLE FIX
+            return load_model(mp, compile=False) 
         return None
     model = get_model()
 
@@ -167,26 +146,19 @@ else:
             log_forensic_action(f"Exhibit {f.name} logged.")
             st.info(f"🧬 EXHIBIT {f.name} | HASH: {f_hash}")
             
-            # --- RESTORED MULTI-ANALYSIS VIEW ---
+            # --- SOURCE VS HEATMAP COMPARISON ---
             c_o, c_h = st.columns(2)
             ela_img = convert_to_ela_image(f, quality=90)
             heat_img = generate_heatmap(f.getvalue(), ela_img)
             with c_o: st.image(f, caption="SOURCE EVIDENCE")
             with c_h: st.image(heat_img, caption="HEATMAP ANALYSIS")
-            
-            c_l, c_p = st.columns(2)
-            with c_l: 
-                st.image(generate_luminance_map(f), caption="LUMINANCE GRADIENT")
-            with c_p: 
-                st.pyplot(plot_histogram(f))
 
         if st.button("INITIATE DEEP SCAN") and model:
-            # (... scan logic same as stable version ...)
             results = []
             zip_out = io.BytesIO()
             with zipfile.ZipFile(zip_out, "a", zipfile.ZIP_DEFLATED, False) as zf:
                 bar = st.progress(0)
-                with st.status("📡 SCANNING...") as status:
+                with st.status("📡 SCANNING PIXELS...") as status:
                     for idx, f in enumerate(files):
                         tmp = f"temp_{f.name}"
                         with open(tmp, "wb") as b: b.write(f.getbuffer())
@@ -197,11 +169,11 @@ else:
                         results.append({"FILENAME": f.name, "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN", "CONFIDENCE": f"{max(pred, 1-pred)*100:.2f}%", "METADATA": "DETECTED" if has_meta else "NONE"})
                         bar.progress((idx+1)/len(files))
                     zf.writestr(f"Forensic_Report_{case_id}.pdf", create_pdf_report(results, case_notes=case_notes))
-                    status.update(label="COMPLETE", state="complete")
+                    status.update(label="ANALYSIS COMPLETE", state="complete")
             st.session_state["analysis_results"] = results
             st.session_state["zip_buffer"] = zip_out.getvalue()
 
-    # --- RESTORED REPORT SECTION ---
+    # --- REPORT SECTION ---
     if st.session_state["analysis_results"]:
         st.markdown("---")
         st.markdown(f"### 📊 FINAL DETERMINATION REPORT: {case_id}")
