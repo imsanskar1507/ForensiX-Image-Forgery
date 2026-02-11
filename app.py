@@ -232,19 +232,20 @@ else:
                             software_tag = "🚩 EDITED (Software Tags Found)"
                         
                         # 2. SUSPECTED FORGERY TYPE (BY ELA DENSITY)
-                        ela_img = convert_to_ela_image(f, quality=90)
-                        forgery_type = classify_forgery_type(ela_img)
+                        ela_img_data = convert_to_ela_image(f, quality=90)
+                        forgery_type = classify_forgery_type(ela_img_data)
                         
-                        # 3. CNN PREDICTION
+                        # 3. CNN PREDICTION [cite: 131, 132]
                         proc = prepare_image_for_cnn(tmp)
                         pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
                         os.remove(tmp)
 
+                        # FIX: Key renamed to 'CONFIDENCE' to match report_gen.py requirements 
                         results.append({
                             "FILENAME": f.name, 
                             "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN", 
                             "FORGERY TYPE": forgery_type,
-                            "CNN CONF.": f"{max(pred, 1-pred)*100:.2f}%", 
+                            "CONFIDENCE": f"{max(pred, 1-pred)*100:.2f}%", 
                             "METADATA": software_tag
                         })
                         bar.progress((idx+1)/len(files))
