@@ -1,8 +1,9 @@
 streamlit
 numpy
-opencv-python-headless
-dlib
-tensorflow
 Pillow
+opencv-python-headless
+tensorflow
+matplotlib
+fpdf
 pandas
 pytz
