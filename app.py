@@ -18,7 +18,6 @@ from tensorflow.keras.models import load_model
 from report_gen import create_pdf_report 
 
 # --- INITIAL CONFIG ---
-# Title updated to ForensiX Image Forgery Detector
 st.set_page_config(page_title="ForensiX Image Forgery Detector", layout="wide", page_icon="🕵️")
 IST = pytz.timezone('Asia/Kolkata')
 
@@ -58,7 +57,14 @@ def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, recovery TEXT)')
-    conn.commit(); conn.close()
+    # Ensure default agent exists for presentation
+    c.execute("SELECT * FROM users WHERE username='sanskar'")
+    if not c.fetchone():
+        hp = hashlib.sha256("detective2026".encode()).hexdigest()
+        hr = hashlib.sha256("nagpur".encode()).hexdigest()
+        c.execute("INSERT INTO users VALUES (?, ?, ?)", ("sanskar", hp, hr))
+    conn.commit()
+    conn.close()
 
 def check_user(u, p):
     conn = sqlite3.connect('users.db')
@@ -71,7 +77,7 @@ def check_user(u, p):
 
 init_db()
 
-# --- PREVIOUS UI CSS RESTORATION ---
+# --- UI CSS ---
 if not st.session_state["logged_in"]:
     st.markdown("""
         <style>
@@ -100,18 +106,18 @@ else:
 
 # --- APP LOGIC ---
 if not st.session_state["logged_in"]:
-    # Name updated on Login Page
     st.markdown("<br><h1 style='text-align:center;'>🛰️ ForensiX Image Forgery Detector</h1>", unsafe_allow_html=True)
     _, col_auth, _ = st.columns([1, 2, 1])
     with col_auth:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
         
+        # --- MODE: LOGIN ---
         if st.session_state["auth_mode"] == "login":
             with st.form("login_gate"):
                 u_in = st.text_input("AGENT ID")
                 p_in = st.text_input("ACCESS KEY", type="password")
                 if st.form_submit_button("AUTHORIZE", use_container_width=True):
-                    if check_user(u_in, p_in) or u_in == "sanskar":
+                    if check_user(u_in, p_in):
                         st.session_state["logged_in"], st.session_state["user"] = True, u_in.strip()
                         log_forensic_action(f"Agent {u_in.upper()} authorized.")
                         st.rerun()
@@ -123,27 +129,48 @@ if not st.session_state["logged_in"]:
             if c2.button("Forgot Password", use_container_width=True):
                 st.session_state["auth_mode"] = "forgot"; st.rerun()
 
+        # --- MODE: REGISTER ---
         elif st.session_state["auth_mode"] == "register":
-            with st.form("register_gate"):
+            with st.form("reg_form"):
                 st.markdown("### Agent Enrollment")
                 new_u = st.text_input("SET AGENT ID")
                 new_p = st.text_input("SET ACCESS KEY", type="password")
-                new_r = st.text_input("RECOVERY HINT")
+                new_r = st.text_input("RECOVERY HINT (e.g. Nagpur)")
                 if st.form_submit_button("ENROLL AGENT", use_container_width=True):
-                    hp, hr = hashlib.sha256(new_p.encode()).hexdigest(), hashlib.sha256(new_r.encode()).hexdigest()
+                    if new_u and new_p:
+                        hp = hashlib.sha256(new_p.encode()).hexdigest()
+                        hr = hashlib.sha256(new_r.encode()).hexdigest()
+                        conn = sqlite3.connect('users.db'); c = conn.cursor()
+                        try:
+                            c.execute("INSERT INTO users VALUES (?, ?, ?)", (new_u.lower().strip(), hp, hr))
+                            conn.commit(); st.success("Success! Please Login."); st.session_state["auth_mode"] = "login"; st.rerun()
+                        except: st.error("ID already exists."); conn.close()
+            if st.button("Back to Login"): st.session_state["auth_mode"] = "login"; st.rerun()
+
+        # --- MODE: FORGOT PASSWORD (CORRECTED) ---
+        elif st.session_state["auth_mode"] == "forgot":
+            with st.form("recovery_form"):
+                st.markdown("### Credential Recovery")
+                f_u = st.text_input("AGENT ID")
+                f_r = st.text_input("RECOVERY HINT")
+                f_np = st.text_input("NEW ACCESS KEY", type="password")
+                if st.form_submit_button("RESET ACCESS KEY", use_container_width=True):
+                    hr = hashlib.sha256(f_r.encode()).hexdigest()
                     conn = sqlite3.connect('users.db'); c = conn.cursor()
-                    try:
-                        c.execute("INSERT INTO users VALUES (?, ?, ?)", (new_u.lower().strip(), hp, hr))
-                        conn.commit(); st.success("Enrollment Successful!"); st.session_state["auth_mode"] = "login"; st.rerun()
-                    except: st.error("ID exists."); conn.close()
+                    c.execute("SELECT * FROM users WHERE username=? AND recovery=?", (f_u.lower().strip(), hr))
+                    if c.fetchone():
+                        hp = hashlib.sha256(f_np.encode()).hexdigest()
+                        c.execute("UPDATE users SET password=? WHERE username=?", (hp, f_u.lower().strip()))
+                        conn.commit(); st.success("Reset Successful!"); st.session_state["auth_mode"] = "login"; st.rerun()
+                    else: st.error("Recovery hint mismatch.")
+                    conn.close()
             if st.button("Back to Login"): st.session_state["auth_mode"] = "login"; st.rerun()
 
         st.markdown('</div>', unsafe_allow_html=True)
 else:
-    # --- MAIN INVESTIGATION DASHBOARD ---
+    # --- DASHBOARD (Rest of your code remains here) ---
     col_title, col_clock = st.columns([2, 1])
     with col_title: 
-        # Name updated on Dashboard
         st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Image Forgery Detector</h2>', unsafe_allow_html=True)
     with col_clock: clock_placeholder = st.empty()
 
