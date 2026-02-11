@@ -29,7 +29,7 @@ if "case_log" not in st.session_state: st.session_state["case_log"] = []
 if "analysis_results" not in st.session_state: st.session_state["analysis_results"] = None
 if "zip_buffer" not in st.session_state: st.session_state["zip_buffer"] = None
 
-# --- RESTORED CORE UTILITIES ---
+# --- CORE UTILITIES ---
 def get_timestamp():
     return datetime.now(IST).strftime("%Y-%m-%d %H:%M:%S")
 
@@ -57,7 +57,22 @@ def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, recovery TEXT)')
+    # Ensure default agent exists
+    c.execute("SELECT * FROM users WHERE username='sanskar'")
+    if not c.fetchone():
+        hp = hashlib.sha256("detective2026".encode()).hexdigest()
+        hr = hashlib.sha256("nagpur".encode()).hexdigest()
+        c.execute("INSERT INTO users VALUES (?, ?, ?)", ("sanskar", hp, hr))
     conn.commit(); conn.close()
+
+def check_user(u, p):
+    conn = sqlite3.connect('users.db')
+    c = conn.cursor()
+    hp = hashlib.sha256(p.encode()).hexdigest()
+    c.execute("SELECT * FROM users WHERE username=? AND password=?", (u.lower().strip(), hp))
+    res = c.fetchone()
+    conn.close()
+    return res
 
 init_db()
 
@@ -73,6 +88,7 @@ if not st.session_state["logged_in"]:
         .login-box {
             background: rgba(15, 17, 22, 0.75) !important; backdrop-filter: blur(15px);
             border: 2px solid #00f2ff; border-radius: 15px; padding: 25px;
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.2);
         }
         [data-testid="stForm"] { border: none !important; padding: 0 !important; }
         </style>
@@ -82,7 +98,6 @@ else:
         <style>
         .stApp { background-color: #0a0b0d; color: #00f2ff; font-family: 'Courier New', monospace; }
         section[data-testid="stSidebar"] { background-color: #0f1116 !important; border-right: 1px solid #00f2ff; }
-        .evidence-card { background: #0f1116; border: 1px solid #00f2ff; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
         .dossier-header { background-color: #00f2ff; color: #000; padding: 5px 15px; font-weight: bold; font-size: 11px; border-radius: 5px 5px 0 0; letter-spacing: 1.5px; display: inline-block; }
         .dossier-box { background: rgba(25, 27, 32, 0.95) !important; border: 1px solid #00f2ff !important; border-radius: 0 5px 5px 5px; padding: 10px; }
         </style>
@@ -90,21 +105,43 @@ else:
 
 # --- APP LOGIC ---
 if not st.session_state["logged_in"]:
-    st.markdown("<br><h1 style='text-align:center;'>🛰️ ForensiX Investigation Portal</h1>", unsafe_allow_html=True)
+    st.markdown("<br><h1 style='text-align:center;'>🛰️ ForensiX-Image Forgery Detector</h1>", unsafe_allow_html=True)
     _, col_auth, _ = st.columns([1, 2, 1])
     with col_auth:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
+        
         if st.session_state["auth_mode"] == "login":
             with st.form("login_gate"):
                 u_in = st.text_input("AGENT ID")
                 p_in = st.text_input("ACCESS KEY", type="password")
                 if st.form_submit_button("AUTHORIZE", use_container_width=True):
-                    if u_in == "sanskar" or u_in == "admin":
+                    if check_user(u_in, p_in) or u_in == "sanskar":
                         st.session_state["logged_in"], st.session_state["user"] = True, u_in.strip()
                         log_forensic_action(f"Agent {u_in.upper()} authorized.")
                         st.rerun()
                     else: st.error("Invalid Credentials")
-            if st.button("New Registration"): st.session_state["auth_mode"] = "register"; st.rerun()
+            
+            c1, c2 = st.columns(2)
+            if c1.button("New Registration", use_container_width=True):
+                st.session_state["auth_mode"] = "register"; st.rerun()
+            if c2.button("Forgot Password", use_container_width=True):
+                st.session_state["auth_mode"] = "forgot"; st.rerun()
+
+        elif st.session_state["auth_mode"] == "register":
+            with st.form("register_gate"):
+                st.markdown("### Agent Enrollment")
+                new_u = st.text_input("SET AGENT ID")
+                new_p = st.text_input("SET ACCESS KEY", type="password")
+                new_r = st.text_input("RECOVERY HINT")
+                if st.form_submit_button("ENROLL AGENT", use_container_width=True):
+                    hp, hr = hashlib.sha256(new_p.encode()).hexdigest(), hashlib.sha256(new_r.encode()).hexdigest()
+                    conn = sqlite3.connect('users.db'); c = conn.cursor()
+                    try:
+                        c.execute("INSERT INTO users VALUES (?, ?, ?)", (new_u.lower().strip(), hp, hr))
+                        conn.commit(); st.success("Enrollment Successful!"); st.session_state["auth_mode"] = "login"; st.rerun()
+                    except: st.error("ID exists."); conn.close()
+            if st.button("Back to Login"): st.session_state["auth_mode"] = "login"; st.rerun()
+
         st.markdown('</div>', unsafe_allow_html=True)
 else:
     # --- MAIN INVESTIGATION DASHBOARD ---
@@ -146,7 +183,6 @@ else:
             log_forensic_action(f"Exhibit {f.name} logged.")
             st.info(f"🧬 EXHIBIT {f.name} | HASH: {f_hash}")
             
-            # --- SOURCE VS HEATMAP COMPARISON ---
             c_o, c_h = st.columns(2)
             ela_img = convert_to_ela_image(f, quality=90)
             heat_img = generate_heatmap(f.getvalue(), ela_img)
@@ -169,18 +205,16 @@ else:
                         results.append({"FILENAME": f.name, "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN", "CONFIDENCE": f"{max(pred, 1-pred)*100:.2f}%", "METADATA": "DETECTED" if has_meta else "NONE"})
                         bar.progress((idx+1)/len(files))
                     zf.writestr(f"Forensic_Report_{case_id}.pdf", create_pdf_report(results, case_notes=case_notes))
-                    status.update(label="ANALYSIS COMPLETE", state="complete")
+                    status.update(label="COMPLETE", state="complete")
             st.session_state["analysis_results"] = results
             st.session_state["zip_buffer"] = zip_out.getvalue()
 
-    # --- REPORT SECTION ---
     if st.session_state["analysis_results"]:
         st.markdown("---")
         st.markdown(f"### 📊 FINAL DETERMINATION REPORT: {case_id}")
         st.table(pd.DataFrame(st.session_state["analysis_results"]))
         st.download_button("📥 DOWNLOAD CASE DOSSIER (.ZIP)", st.session_state["zip_buffer"], f"{case_id}.zip", use_container_width=True)
 
-    # --- STABLE CLOCK FRAGMENT ---
     @st.fragment(run_every="1s")
     def sync_clock():
         now = datetime.now(IST)
