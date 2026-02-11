@@ -13,7 +13,7 @@ import zipfile
 import time 
 import matplotlib.pyplot as plt
 from processor import convert_to_ela_image, prepare_image_for_cnn
-from metadata_scanner import scan_metadata
+from metadata_scanner import scan_metadata # Utilizes exiftool or PIL
 from tensorflow.keras.models import load_model
 from report_gen import create_pdf_report 
 
@@ -57,7 +57,6 @@ def init_db():
     conn = sqlite3.connect('users.db')
     c = conn.cursor()
     c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT, recovery TEXT)')
-    # Ensure default agent exists for presentation
     c.execute("SELECT * FROM users WHERE username='sanskar'")
     if not c.fetchone():
         hp = hashlib.sha256("detective2026".encode()).hexdigest()
@@ -110,8 +109,6 @@ if not st.session_state["logged_in"]:
     _, col_auth, _ = st.columns([1, 2, 1])
     with col_auth:
         st.markdown('<div class="login-box">', unsafe_allow_html=True)
-        
-        # --- MODE: LOGIN ---
         if st.session_state["auth_mode"] == "login":
             with st.form("login_gate"):
                 u_in = st.text_input("AGENT ID")
@@ -122,32 +119,26 @@ if not st.session_state["logged_in"]:
                         log_forensic_action(f"Agent {u_in.upper()} authorized.")
                         st.rerun()
                     else: st.error("Invalid Credentials")
-            
             c1, c2 = st.columns(2)
             if c1.button("New Registration", use_container_width=True):
                 st.session_state["auth_mode"] = "register"; st.rerun()
             if c2.button("Forgot Password", use_container_width=True):
                 st.session_state["auth_mode"] = "forgot"; st.rerun()
-
-        # --- MODE: REGISTER ---
         elif st.session_state["auth_mode"] == "register":
             with st.form("reg_form"):
                 st.markdown("### Agent Enrollment")
                 new_u = st.text_input("SET AGENT ID")
                 new_p = st.text_input("SET ACCESS KEY", type="password")
-                new_r = st.text_input("RECOVERY HINT (e.g. Nagpur)")
+                new_r = st.text_input("RECOVERY HINT")
                 if st.form_submit_button("ENROLL AGENT", use_container_width=True):
                     if new_u and new_p:
-                        hp = hashlib.sha256(new_p.encode()).hexdigest()
-                        hr = hashlib.sha256(new_r.encode()).hexdigest()
+                        hp, hr = hashlib.sha256(new_p.encode()).hexdigest(), hashlib.sha256(new_r.encode()).hexdigest()
                         conn = sqlite3.connect('users.db'); c = conn.cursor()
                         try:
                             c.execute("INSERT INTO users VALUES (?, ?, ?)", (new_u.lower().strip(), hp, hr))
                             conn.commit(); st.success("Success! Please Login."); st.session_state["auth_mode"] = "login"; st.rerun()
-                        except: st.error("ID already exists."); conn.close()
+                        except: st.error("ID exists."); conn.close()
             if st.button("Back to Login"): st.session_state["auth_mode"] = "login"; st.rerun()
-
-        # --- MODE: FORGOT PASSWORD (CORRECTED) ---
         elif st.session_state["auth_mode"] == "forgot":
             with st.form("recovery_form"):
                 st.markdown("### Credential Recovery")
@@ -165,13 +156,10 @@ if not st.session_state["logged_in"]:
                     else: st.error("Recovery hint mismatch.")
                     conn.close()
             if st.button("Back to Login"): st.session_state["auth_mode"] = "login"; st.rerun()
-
         st.markdown('</div>', unsafe_allow_html=True)
 else:
-    # --- DASHBOARD (Rest of your code remains here) ---
     col_title, col_clock = st.columns([2, 1])
-    with col_title: 
-        st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Image Forgery Detector</h2>', unsafe_allow_html=True)
+    with col_title: st.markdown('<h2 style="margin:0; color:#00f2ff;">🛰️ ForensiX Image Forgery Detector</h2>', unsafe_allow_html=True)
     with col_clock: clock_placeholder = st.empty()
 
     @st.cache_resource
@@ -188,11 +176,9 @@ else:
             <h2 style="margin:0; color: #00f2ff; font-size: 22px;">⚡ {st.session_state['user'].upper()}</h2>
             <p style="margin:10px 0 0 0; font-size: 14px; color: #00f2ff; font-weight: bold;">📍 LOCATION: NAGPUR_MS_IN</p>
         </div>""", unsafe_allow_html=True)
-        
         st.markdown("### 📜 SESSION LOG")
         with st.expander("Chain of Custody", expanded=False):
             for entry in st.session_state["case_log"]: st.text(entry)
-
         case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
         st.markdown('<div class="dossier-header">📝 INVESTIGATION LOG</div><div class="dossier-box">', unsafe_allow_html=True)
         case_notes = st.text_area("FIELD NOTES", height=150, label_visibility="collapsed")
@@ -201,13 +187,11 @@ else:
 
     st.markdown("---")
     files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
-    
     if files:
         for f in files:
             f_hash = get_file_hash(f.getvalue())
             log_forensic_action(f"Exhibit {f.name} logged.")
             st.info(f"🧬 EXHIBIT {f.name} | HASH: {f_hash}")
-            
             c_o, c_h = st.columns(2)
             ela_img = convert_to_ela_image(f, quality=90)
             heat_img = generate_heatmap(f.getvalue(), ela_img)
@@ -219,15 +203,28 @@ else:
             zip_out = io.BytesIO()
             with zipfile.ZipFile(zip_out, "a", zipfile.ZIP_DEFLATED, False) as zf:
                 bar = st.progress(0)
-                with st.status("📡 SCANNING PIXELS...") as status:
+                with st.status("📡 SCANNING...") as status:
                     for idx, f in enumerate(files):
                         tmp = f"temp_{f.name}"
                         with open(tmp, "wb") as b: b.write(f.getbuffer())
-                        has_meta, _ = scan_metadata(tmp)
+                        
+                        # --- ENHANCED METADATA SCAN ---
+                        has_meta, meta_info = scan_metadata(tmp)
+                        # Specific check for editing software
+                        software_tag = "🏳️ ORIGINAL"
+                        software_list = ["Adobe Photoshop", "Canva", "GIMP", "PicsArt", "Lightroom"]
+                        if has_meta and any(s.lower() in str(meta_info).lower() for s in software_list):
+                            software_tag = "🚩 EDITED (Software Tags Found)"
+                        
                         proc = prepare_image_for_cnn(tmp)
                         pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
                         os.remove(tmp)
-                        results.append({"FILENAME": f.name, "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN", "CONFIDENCE": f"{max(pred, 1-pred)*100:.2f}%", "METADATA": "DETECTED" if has_meta else "NONE"})
+                        results.append({
+                            "FILENAME": f.name, 
+                            "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN", 
+                            "CNN CONF.": f"{max(pred, 1-pred)*100:.2f}%", 
+                            "METADATA": software_tag
+                        })
                         bar.progress((idx+1)/len(files))
                     zf.writestr(f"Forensic_Report_{case_id}.pdf", create_pdf_report(results, case_notes=case_notes))
                     status.update(label="COMPLETE", state="complete")
