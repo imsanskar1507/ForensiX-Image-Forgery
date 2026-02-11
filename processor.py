@@ -76,22 +76,26 @@ def prepare_image_for_cnn(image_path):
     return img
 
 def convert_to_ela_image(image_file, quality=90):
+    """
+    Performs Error Level Analysis to detect compression 
+    mismatches in forged images[cite: 88].
+    """
     original = Image.open(image_file).convert('RGB')
     
-    # Create temporary resaved image
+    # Temporary save with reduced quality
     temp_filename = 'temp_ela.jpg'
     original.save(temp_filename, 'JPEG', quality=quality)
     temporary = Image.open(temp_filename)
     
-    # Calculate difference
+    # Calculate difference between original and compressed [cite: 101]
     ela_image = ImageChops.difference(original, temporary)
     
-    # Scaling logic
+    # Scale intensities for visibility
     extrema = ela_image.getextrema()
-    max_diff = max([ex[1] for ex in extrema]) or 1
+    max_diff = max([ex[1] for ex in extrema])
+    if max_diff == 0:
+        max_diff = 1
+    scale = 255.0 / max_diff
+    ela_image = ImageChops.constant(ela_image, scale)
     
-    # CRITICAL FIX: Cast scale to int to avoid TypeError in PIL.ImageChops.constant
-    scale = int(255.0 / max_diff)
-    
-    # Enhancing visibility for the dashboard
-    return Image.blend(ela_image, Image.new("RGB", ela_image.size, (0,0,0)), 1 - scale/255.0)
+    return ela_image
