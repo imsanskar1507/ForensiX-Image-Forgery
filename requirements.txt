@@ -1,9 +1,8 @@
 streamlit
 numpy
 Pillow
+pandas
+pytz
 opencv-python-headless
 tensorflow
 matplotlib
-fpdf
-pandas
-pytz
