@@ -4,10 +4,11 @@ import os
 from PIL import Image, ImageChops
 
 def prepare_image_for_cnn(image_path):
-    """Strictly enforces 224x224 RGB input for the CNN."""
     img = cv2.imread(image_path)
-    if img is None:
-        return np.zeros((224, 224, 3), dtype=np.float32)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    # Ensure 224x224 to prevent matrix alignment issues
+    img = cv2.resize(img, (224, 224), interpolation=cv2.INTER_AREA) 
+    return img.astype('float32') / 255.0
     
     # Convert BGR to RGB
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
