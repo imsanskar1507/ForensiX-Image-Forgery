@@ -59,8 +59,16 @@ else:
     # --- DASHBOARD ---
     @st.cache_resource
     def get_model():
-        # Using compile=False for faster deployment
-        return load_model('forgery_detector.h5', compile=False)
+        model_path = 'forgery_detector.h5'
+        # Check if file exists before trying to load it
+        if not os.path.exists(model_path):
+            st.error(f"❌ OSError: File '{model_path}' not found in the repository root.")
+            return None
+        try:
+            return load_model(model_path, compile=False)
+        except Exception as e:
+            st.error(f"❌ Error loading model: {e}. If the file is >25MB, ensure you used Git LFS.")
+            return None
     
     model = get_model()
 
@@ -68,7 +76,7 @@ else:
         st.markdown(f"**⚡ OPERATIVE: {st.session_state['user'].upper()}**")
         st.markdown(f"**📍 NAGPUR_MS_IN**")
         
-        # Fixed: Create a placeholder for the clock to avoid StreamlitAPIException
+        # Placeholder for the clock to prevent StreamlitAPIException
         clock_spot = st.empty()
         
         if st.button("🔴 EXIT"): 
@@ -81,8 +89,8 @@ else:
         for f in files:
             c_o, c_h = st.columns(2)
             ela_img = convert_to_ela_image(f)
-            with c_o: st.image(f, caption="SOURCE EVIDENCE")
-            with c_h: st.image(ela_img, caption="ELA ANALYSIS")
+            with c_o: st.image(f, caption="SOURCE EVIDENCE", use_container_width=True)
+            with c_h: st.image(ela_img, caption="ELA ANALYSIS", use_container_width=True)
 
         if st.button("INITIATE DEEP SCAN") and model:
             results = []
@@ -93,6 +101,7 @@ else:
                 
                 # Pre-processing (128x128 Fix for the 25088 ValueError)
                 proc = prepare_image_for_cnn(tmp)
+                # Reshape ensures the model receives exactly (1, 128, 128, 3)
                 input_tensor = proc.reshape((1, 128, 128, 3)).astype('float32')
                 
                 pred = model.predict(input_tensor, verbose=0)[0][0]
@@ -108,7 +117,7 @@ else:
             st.session_state["analysis_results"] = results
             st.table(pd.DataFrame(results))
 
-    # FIXED FRAGMENT: Updates only the placeholder inside the fragment
+    # Fragment updates only the specific placeholder
     @st.fragment(run_every="1s")
     def sync_clock(placeholder):
         now = datetime.now(IST)
