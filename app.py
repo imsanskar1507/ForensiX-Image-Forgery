@@ -37,11 +37,10 @@ def init_db():
 
 init_db()
 
-# --- UI CSS (Restored Design) ---
+# --- UI CSS (Original Design Preserved) ---
 st.markdown("""<style>
     .stApp { background-color: #0a0b0d; color: #00f2ff; font-family: 'Courier New', monospace; }
     section[data-testid="stSidebar"] { background-color: #0f1116 !important; border-right: 1px solid #00f2ff; }
-    .dossier-box { background: rgba(25, 27, 32, 0.95); border: 1px solid #00f2ff; border-radius: 5px; padding: 10px; }
 </style>""", unsafe_allow_html=True)
 
 if not st.session_state["logged_in"]:
@@ -60,23 +59,30 @@ else:
     # --- DASHBOARD ---
     @st.cache_resource
     def get_model():
+        # Using compile=False for faster deployment
         return load_model('forgery_detector.h5', compile=False)
+    
     model = get_model()
 
     with st.sidebar:
         st.markdown(f"**⚡ OPERATIVE: {st.session_state['user'].upper()}**")
         st.markdown(f"**📍 NAGPUR_MS_IN**")
-        if st.button("🔴 EXIT"): st.session_state["logged_in"] = False; st.rerun()
+        
+        # Fixed: Create a placeholder for the clock to avoid StreamlitAPIException
+        clock_spot = st.empty()
+        
+        if st.button("🔴 EXIT"): 
+            st.session_state["logged_in"] = False
+            st.rerun()
 
     files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png"], accept_multiple_files=True)
     
     if files:
-        # Side-by-Side UI (Restored)
         for f in files:
             c_o, c_h = st.columns(2)
             ela_img = convert_to_ela_image(f)
-            with c_o: st.image(f, caption="SOURCE EVIDENCE", use_container_width=True)
-            with c_h: st.image(ela_img, caption="ELA ANALYSIS", use_container_width=True)
+            with c_o: st.image(f, caption="SOURCE EVIDENCE")
+            with c_h: st.image(ela_img, caption="ELA ANALYSIS")
 
         if st.button("INITIATE DEEP SCAN") and model:
             results = []
@@ -85,11 +91,10 @@ else:
                 tmp = f"temp_{f.name}"
                 with open(tmp, "wb") as b: b.write(f.getbuffer())
                 
-                # Pre-processing using 128x128
+                # Pre-processing (128x128 Fix for the 25088 ValueError)
                 proc = prepare_image_for_cnn(tmp)
                 input_tensor = proc.reshape((1, 128, 128, 3)).astype('float32')
                 
-                # Predicting with hard-coded shape fix
                 pred = model.predict(input_tensor, verbose=0)[0][0]
                 os.remove(tmp)
 
@@ -103,7 +108,10 @@ else:
             st.session_state["analysis_results"] = results
             st.table(pd.DataFrame(results))
 
+    # FIXED FRAGMENT: Updates only the placeholder inside the fragment
     @st.fragment(run_every="1s")
-    def sync_clock():
-        st.sidebar.markdown(f"**🕒 {datetime.now(IST).strftime('%I:%M:%S %p')}**")
-    sync_clock()
+    def sync_clock(placeholder):
+        now = datetime.now(IST)
+        placeholder.markdown(f"**🕒 {now.strftime('%I:%M:%S %p')}**")
+    
+    sync_clock(clock_spot)
