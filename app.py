@@ -54,7 +54,10 @@ else:
             <h3 style="margin:0; color: #00f2ff;">⚡ SANSKAR</h3>
             <p style="margin:0; font-size: 12px;">📍 NAGPUR_MS_IN</p>
         </div>""", unsafe_allow_html=True)
+        
         st.markdown("---")
+        case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
+        
         if st.button("🔴 EXIT SESSION"):
             st.session_state.logged_in = False
             st.rerun()
@@ -66,24 +69,22 @@ else:
     model = load_engine()
 
     # --- MAIN ANALYSIS LOOP ---
-    files = st.file_uploader("UPLOAD EVIDENCE EXHIBITS", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+    files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
 
     if files:
         for f in files:
             st.markdown(f"**EXHIBIT IDENTIFIED: `{f.name}`**")
             
-            # STEP 1: Generate ELA Heatmap first
+            # STEP 1: Generate Heatmap first to ensure buffer is used correctly
             ela_heatmap = convert_to_ela_image(f)
             
-            # STEP 2: Display Side-by-Side
+            # STEP 2: Side-by-Side Display
             col_a, col_b = st.columns(2)
             with col_a:
-                # STEP 3: Rewind the pointer so the display can show the original
-                f.seek(0) 
-                st.image(f, caption="SOURCE EVIDENCE (Original)", use_container_width=True)
+                f.seek(0) # Reset before every display call
+                st.image(f, caption="SOURCE EVIDENCE", use_container_width=True)
             with col_b:
-                # Display the pre-generated ELA image
-                st.image(ela_heatmap, caption="ELA ANALYSIS (Heatmap)", use_container_width=True)
+                st.image(ela_heatmap, caption="ELA DIFFERENCE MAP", use_container_width=True)
 
         st.markdown("---")
         if st.button("INITIATE DEEP SCAN (CNN)") and model:
@@ -94,7 +95,7 @@ else:
                     f.seek(0)
                     b.write(f.read())
                 
-                # Pre-processing (128x128 matrix sync)
+                # Pre-processing (128x128 Matrix Fix)
                 img_data = prepare_image_for_cnn(t_path)
                 tensor = np.expand_dims(img_data, axis=0)
                 pred = model.predict(tensor, verbose=0)[0][0]
