@@ -2,57 +2,54 @@ import streamlit as st
 import numpy as np
 import os
 import pandas as pd
-import sqlite3
 import hashlib
 from processor import convert_to_ela_image, prepare_image_for_cnn
 from tensorflow.keras.models import load_model
 
-# --- UI CONFIG ---
-st.set_page_config(page_title="ForensiX | Nagpur Division", layout="wide", page_icon="🕵️")
+# --- INITIAL CONFIG ---
+st.set_page_config(page_title="ForensiX | Nagpur Division", layout="wide")
 
-# --- DATABASE SETUP ---
-def init_db():
-    conn = sqlite3.connect('users.db')
-    c = conn.cursor()
-    c.execute('CREATE TABLE IF NOT EXISTS users (username TEXT PRIMARY KEY, password TEXT)')
-    # Default operative: sanskar
-    c.execute("SELECT * FROM users WHERE username='sanskar'")
-    if not c.fetchone():
-        hp = hashlib.sha256("detective2026".encode()).hexdigest()
-        c.execute("INSERT INTO users VALUES ('sanskar', ?)", (hp,))
-    conn.commit()
-    conn.close()
-
-init_db()
-
-# --- AUTH LOGIC ---
+# Session State for Authentication
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
 
+# --- AUTHENTICATION UI ---
 if not st.session_state["logged_in"]:
-    st.markdown("<h1 style='text-align:center;'>🛰️ ForensiX Authorization</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center; color:#00f2ff;'>🛰️ ForensiX Authorization</h1>", unsafe_allow_html=True)
     _, col, _ = st.columns([1, 2, 1])
+    
     with col:
-        with st.form("login"):
-            u = st.text_input("AGENT ID")
-            p = st.text_input("ACCESS KEY", type="password")
-            if st.form_submit_button("AUTHORIZE", use_container_width=True):
-                if u == "sanskar":
+        with st.form("login_form"):
+            st.markdown("### ENTER AGENT CREDENTIALS")
+            u_input = st.text_input("AGENT ID (Case Sensitive)")
+            p_input = st.text_input("ACCESS KEY", type="password")
+            submit = st.form_submit_button("AUTHORIZE SESSION", use_container_width=True)
+            
+            if submit:
+                # Direct check to ensure no database delay issues
+                if u_input == "sanskar" and p_input == "detective2026":
                     st.session_state["logged_in"] = True
+                    st.success("Access Granted. Redirecting...")
                     st.rerun()
                 else:
-                    st.error("Access Denied: Invalid Credentials")
+                    st.error("Invalid Credentials. Access Denied.")
 else:
-    # --- DASHBOARD ---
+    # --- INVESTIGATION DASHBOARD ---
     st.sidebar.markdown(f"**⚡ OPERATIVE: SANSKAR**")
     st.sidebar.markdown("**📍 LOCATION: NAGPUR_MS_IN**")
+    st.sidebar.markdown("---")
     
     @st.cache_resource
-    def load_engine():
-        # compile=False speeds up loading and prevents local errors
-        return load_model('forgery_detector.h5', compile=False)
+    def load_forensic_engine():
+        model_path = 'forgery_detector.h5'
+        if os.path.exists(model_path):
+            return load_model(model_path, compile=False)
+        return None
     
-    model = load_engine()
+    model = load_forensic_engine()
+
+    if model is None:
+        st.error("❌ Model file 'forgery_detector.h5' not found in root directory.")
 
     st.markdown("## 🛰️ Forensic Evidence Analysis")
     files = st.file_uploader("UPLOAD EXHIBITS", type=["jpg", "png"], accept_multiple_files=True)
@@ -68,8 +65,9 @@ else:
         if st.button("INITIATE DEEP SCAN") and model:
             results = []
             bar = st.progress(0)
+            
             for idx, f in enumerate(files):
-                # Temporary file for processing
+                # Temporary file handling
                 t_path = f"temp_{f.name}"
                 with open(t_path, "wb") as b:
                     b.write(f.getbuffer())
@@ -77,18 +75,17 @@ else:
                 # 1. Pre-process (Strict 128x128)
                 img_data = prepare_image_for_cnn(t_path)
                 
-                # 2. Add Batch Dimension (The Fix for ValueError)
-                # tensor shape becomes (1, 128, 128, 3)
+                # 2. Add Batch Dimension (Fix for ValueError)
                 tensor = np.expand_dims(img_data, axis=0)
                 
-                # 3. Model Prediction
+                # 3. Predict
                 pred = model.predict(tensor, verbose=0)[0][0]
                 
                 os.remove(t_path)
                 results.append({
                     "FILENAME": f.name, 
                     "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN",
-                    "PROBABILITY": f"{pred:.4f}"
+                    "CONFIDENCE": f"{max(pred, 1-pred)*100:.2f}%"
                 })
                 bar.progress((idx + 1) / len(files))
             
