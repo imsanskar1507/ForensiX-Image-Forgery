@@ -1,6 +1,6 @@
 import streamlit as st
 import numpy as np
-from PIL import Image, ImageChops
+from PIL import Image
 import os
 from datetime import datetime
 import pytz 
@@ -234,18 +234,16 @@ else:
                         ela_img_data = convert_to_ela_image(f, quality=90)
                         forgery_type = classify_forgery_type(ela_img_data)
                         
-                        # 3. CNN PREDICTION
-                        # FIX: Strictly enforce input shape (224x224x3) for Customized CNN
+                        # 3. CNN PREDICTION (Strict Shape Fix)
                         proc = prepare_image_for_cnn(tmp)
                         if proc.shape != (224, 224, 3):
                             proc = cv2.resize(proc, (224, 224))
                         
                         input_tensor = np.expand_dims(proc, axis=0).astype('float32')
-                        pred_output = model.predict(input_tensor)
-                        pred = pred_output[0][0]
+                        pred = model.predict(input_tensor)[0][0]
                         os.remove(tmp)
 
-                        # Standardized key 'CONFIDENCE' for report_gen.py
+                        # FIX: Changed key to 'CONFIDENCE' to match report_gen.py requirements
                         results.append({
                             "FILENAME": f.name, 
                             "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN", 
