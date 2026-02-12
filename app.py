@@ -14,19 +14,19 @@ IST = pytz.timezone('Asia/Kolkata')
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# --- UI BRANDING ---
+# --- UI STYLING ---
 st.markdown("""
 <style>
     .stApp { background-color: #0a0b0d; color: #00f2ff; font-family: 'Courier New', monospace; }
     section[data-testid="stSidebar"] { background-color: #0f1116 !important; border-right: 1px solid #00f2ff; }
-    .stButton>button { background-color: transparent; color: #00f2ff; border: 1px solid #00f2ff; width: 100%; border-radius: 2px; }
+    .stButton>button { background-color: transparent; color: #00f2ff; border: 1px solid #00f2ff; width: 100%; border-radius: 0px; }
     .stButton>button:hover { background-color: #00f2ff; color: #000; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- AUTHENTICATION ---
 if not st.session_state.logged_in:
-    st.markdown("<h1 style='text-align:center; color:#00f2ff;'>🛰️ ForensiX Authorization</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center;'>🛰️ ForensiX Authorization</h1>", unsafe_allow_html=True)
     _, col, _ = st.columns([1, 1.5, 1])
     with col:
         u = st.text_input("AGENT ID")
@@ -38,7 +38,7 @@ if not st.session_state.logged_in:
             else:
                 st.error("Invalid Credentials")
 else:
-    # --- DASHBOARD HEADER ---
+    # --- HEADER ---
     c1, c2 = st.columns([3, 1])
     with c1: 
         st.markdown('<h2 style="color:#00f2ff; margin:0;">🛰️ Forensic Investigation Dashboard</h2>', unsafe_allow_html=True)
@@ -56,7 +56,7 @@ else:
         </div>""", unsafe_allow_html=True)
         st.markdown("---")
         case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
-        if st.button("🔴 EXIT SESSION"):
+        if st.sidebar.button("🔴 EXIT SESSION"):
             st.session_state.logged_in = False
             st.rerun()
 
@@ -66,23 +66,30 @@ else:
     
     model = load_engine()
 
-    files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+    # --- MAIN ANALYSIS LOOP ---
+    files = st.file_uploader("UPLOAD EXHIBIT EVIDENCE", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
 
     if files:
         for f in files:
-            st.markdown(f"**EXHIBIT: `{f.name}`**")
+            st.markdown(f"**ANALYZING EXHIBIT: `{f.name}`**")
+            
+            # STEP 1: Generate ELA image first
             ela_heatmap = convert_to_ela_image(f)
             
+            # STEP 2: Create columns for comparison
             col_a, col_b = st.columns(2)
+            
             with col_a:
-                f.seek(0)
-                st.image(f, caption="SOURCE EVIDENCE", use_container_width=True)
+                f.seek(0) # Rewind the tape for display
+                st.image(f, caption="SOURCE EVIDENCE (Original)", use_container_width=True)
+            
             with col_b:
-                st.image(ela_heatmap, caption="ELA DIFFERENCE MAP", use_container_width=True)
+                # Display the amplified ELA image
+                st.image(ela_heatmap, caption="ELA DIFFERENCE MAP (Heatmap)", use_container_width=True)
 
         st.markdown("---")
         if st.button("INITIATE DEEP SCAN (CNN)") and model:
-            results_data = []
+            results = []
             for f in files:
                 t_path = f"temp_{f.name}"
                 with open(t_path, "wb") as b:
@@ -94,22 +101,15 @@ else:
                 pred = model.predict(tensor, verbose=0)[0][0]
                 os.remove(t_path)
                 
-                results_data.append({
+                results.append({
                     "EXHIBIT": f.name, 
                     "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN",
-                    "CONFIDENCE": f"{max(pred, 1-pred)*100:.2f}%",
-                    "TIMESTAMP": datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')
+                    "CONFIDENCE": f"{max(pred, 1-pred)*100:.2f}%"
                 })
             
-            df = pd.DataFrame(results_data)
-            st.markdown("### 📊 FINAL DETERMINATION REPORT")
+            df = pd.DataFrame(results)
             st.table(df)
-
-            # DOWNLOAD BUTTON
+            
+            # DOWNLOAD REPORT
             csv = df.to_csv(index=False).encode('utf-8')
-            st.download_button(
-                label="📥 DOWNLOAD FORENSIC REPORT (CSV)",
-                data=csv,
-                file_name=f"ForensiX_Report_{case_id}.csv",
-                mime='text/csv',
-            )
+            st.download_button("📥 DOWNLOAD CASE REPORT", data=csv, file_name=f"Report_{case_id}.csv", mime='text/csv')
