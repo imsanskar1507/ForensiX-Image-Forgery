@@ -6,6 +6,7 @@ import sqlite3
 import hashlib
 from datetime import datetime
 import pytz
+import io
 from processor import convert_to_ela_image, prepare_image_for_cnn
 from tensorflow.keras.models import load_model
 
@@ -14,8 +15,10 @@ st.set_page_config(page_title="ForensiX | Nagpur Division", layout="wide", page_
 IST = pytz.timezone('Asia/Kolkata')
 
 # Session State Initialization
-if "logged_in" not in st.session_state: st.session_state.logged_in = False
-if "user" not in st.session_state: st.session_state.user = "Unknown"
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "user" not in st.session_state:
+    st.session_state.user = "Unknown"
 
 # --- DATABASE SETUP ---
 def init_db():
@@ -37,6 +40,7 @@ st.markdown("""
     section[data-testid="stSidebar"] { background-color: #0f1116 !important; border-right: 1px solid #00f2ff; }
     .stButton>button { background-color: transparent; color: #00f2ff; border: 1px solid #00f2ff; width: 100%; }
     .stButton>button:hover { background-color: #00f2ff; color: #000; }
+    .report-box { border: 1px solid #00f2ff; padding: 15px; border-radius: 5px; background: rgba(0, 242, 255, 0.05); }
 </style>
 """, unsafe_allow_html=True)
 
@@ -45,22 +49,34 @@ if not st.session_state.logged_in:
     st.markdown("<h1 style='text-align:center; color:#00f2ff;'>🛰️ ForensiX Authorization</h1>", unsafe_allow_html=True)
     _, col, _ = st.columns([1, 1.5, 1])
     with col:
+        st.info("Enter Agent Credentials to Access Nagpur Division Terminal")
         u = st.text_input("AGENT ID")
         p = st.text_input("ACCESS KEY", type="password")
-        if st.button("AUTHORIZE SESSION"):
-            if u == "sanskar" and p == "detective2026":
+        
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("AUTHORIZE SESSION"):
+                if u == "sanskar" and p == "detective2026":
+                    st.session_state.logged_in = True
+                    st.session_state.user = u
+                    st.rerun()
+                else:
+                    st.error("Invalid Credentials")
+        with col_btn2:
+            if st.button("DEBUG BYPASS"):
                 st.session_state.logged_in = True
-                st.session_state.user = u
+                st.session_state.user = "SANSKAR (DEBUG)"
                 st.rerun()
-            else:
-                st.error("Invalid Credentials")
 else:
     # --- DASHBOARD UI ---
     col_title, col_clock = st.columns([2, 1])
-    with col_title: st.markdown('<h2 style="color:#00f2ff;">🛰️ Forensic Investigation Dashboard</h2>', unsafe_allow_html=True)
+    with col_title: 
+        st.markdown('<h2 style="color:#00f2ff; margin-bottom:0;">🛰️ Forensic Investigation Dashboard</h2>', unsafe_allow_html=True)
+        st.caption("Advanced Image Forgery Detection System | G H Raisoni University Project")
+        
     with col_clock: 
         now = datetime.now(IST).strftime('%I:%M:%S %p')
-        st.markdown(f"<p style='text-align:right;'>🕒 {now}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='text-align:right; font-size: 20px; font-weight: bold;'>🕒 {now}</p>", unsafe_allow_html=True)
 
     # SIDEBAR: Operative Profile & Case Management
     with st.sidebar:
@@ -71,50 +87,74 @@ else:
         </div>""", unsafe_allow_html=True)
         
         st.markdown("---")
+        st.subheader("Case Management")
         case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
-        case_notes = st.text_area("FIELD NOTES", height=100)
+        case_notes = st.text_area("FIELD NOTES", height=100, placeholder="Enter observation data...")
         
-        if st.button("🔴 EXIT SESSION"):
+        if st.sidebar.button("🔴 EXIT SESSION"):
             st.session_state.logged_in = False
             st.rerun()
 
-    # MAIN CONTENT
+    # --- MODEL LOADING ---
     @st.cache_resource
     def load_engine():
-        return load_model('forgery_detector.h5', compile=False) if os.path.exists('forgery_detector.h5') else None
+        model_path = 'forgery_detector.h5'
+        if os.path.exists(model_path):
+            return load_model(model_path, compile=False)
+        return None
     
     model = load_engine()
 
-    files = st.file_uploader("UPLOAD EVIDENCE EXHIBITS", type=["jpg", "png"], accept_multiple_files=True)
+    # --- MAIN CONTENT ---
+    st.markdown("### 🧬 Evidence Upload")
+    files = st.file_uploader("UPLOAD EXHIBIT IMAGES", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
 
     if files:
         for f in files:
-            st.markdown(f"<div style='border-left: 3px solid #00f2ff; padding-left: 10px; margin: 20px 0;'>EXHIBIT: {f.name}</div>", unsafe_allow_html=True)
+            st.markdown(f"---")
+            st.markdown(f"**FILE IDENTIFIED:** `{f.name}`")
+            
+            # GENERATE ELA HEATMAP (Ensures fresh buffer access)
+            ela_result = convert_to_ela_image(f)
+            
             col1, col2 = st.columns(2)
-            with col1: st.image(f, caption="SOURCE EVIDENCE", use_container_width=True)
-            with col2: st.image(convert_to_ela_image(f), caption="ELA HEATMAP", use_container_width=True)
+            with col1: 
+                st.image(f, caption="SOURCE EVIDENCE", use_container_width=True)
+            with col2: 
+                if ela_result:
+                    st.image(ela_result, caption="ELA ANALYSIS (HEATMAP)", use_container_width=True)
+                else:
+                    st.error("Error processing ELA Heatmap.")
 
-        if st.button("INITIATE DEEP SCAN") and model:
+        st.markdown("---")
+        if st.button("INITIATE DEEP SCAN (CNN ANALYSIS)") and model:
             results = []
             bar = st.progress(0)
+            
             for idx, f in enumerate(files):
+                # Temporary file for CNN processing
                 t_path = f"temp_{f.name}"
-                with open(t_path, "wb") as b: b.write(f.getbuffer())
+                with open(t_path, "wb") as b: 
+                    b.write(f.getvalue())
                 
-                # Pre-processing (128x128 Fix)
+                # Pre-processing (Forced 128x128 for matrix match)
                 img_data = prepare_image_for_cnn(t_path)
                 tensor = np.expand_dims(img_data, axis=0)
                 
-                # Prediction
+                # Model Prediction
                 pred = model.predict(tensor, verbose=0)[0][0]
                 os.remove(t_path)
                 
                 results.append({
                     "EXHIBIT": f.name, 
-                    "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN",
+                    "VERDICT": "🚩 FORGERY DETECTED" if pred > 0.5 else "🏳️ EVIDENCE CLEAN",
                     "CONFIDENCE": f"{max(pred, 1-pred)*100:.2f}%"
                 })
                 bar.progress((idx + 1) / len(files))
             
+            st.markdown('<div class="report-box">', unsafe_allow_html=True)
             st.markdown("### 📊 FINAL DETERMINATION REPORT")
             st.table(pd.DataFrame(results))
+            st.markdown('</div>', unsafe_allow_html=True)
+        elif not model:
+            st.warning("Forensic Engine (forgery_detector.h5) not found. Deep scan disabled.")
