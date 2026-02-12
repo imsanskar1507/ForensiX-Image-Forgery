@@ -1,6 +1,6 @@
 import streamlit as st
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageChops
 import os
 from datetime import datetime
 import pytz 
@@ -56,7 +56,6 @@ def generate_heatmap(original_img_bytes, ela_img):
 def classify_forgery_type(ela_img):
     """Analyzes ELA pixel intensity to suspect forgery technique."""
     ela_array = np.array(ela_img.convert('L'))
-    # [cite_start]Thresholding high-intensity error regions (outliers) [cite: 231]
     high_error_pixels = np.count_nonzero(ela_array > 40)
     total_pixels = ela_array.size
     density = high_error_pixels / total_pixels
@@ -235,12 +234,18 @@ else:
                         ela_img_data = convert_to_ela_image(f, quality=90)
                         forgery_type = classify_forgery_type(ela_img_data)
                         
-                        # [cite_start]3. CNN PREDICTION [cite: 131, 132]
+                        # 3. CNN PREDICTION
+                        # FIX: Strictly enforce input shape (224x224x3) for Customized CNN
                         proc = prepare_image_for_cnn(tmp)
-                        pred = model.predict(np.expand_dims(proc, axis=0))[0][0]
+                        if proc.shape != (224, 224, 3):
+                            proc = cv2.resize(proc, (224, 224))
+                        
+                        input_tensor = np.expand_dims(proc, axis=0).astype('float32')
+                        pred_output = model.predict(input_tensor)
+                        pred = pred_output[0][0]
                         os.remove(tmp)
 
-                        # Standardized key 'CONFIDENCE' to match report_gen.py requirements
+                        # Standardized key 'CONFIDENCE' for report_gen.py
                         results.append({
                             "FILENAME": f.name, 
                             "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN", 
@@ -250,7 +255,6 @@ else:
                         })
                         bar.progress((idx+1)/len(files))
                     
-                    # Generate PDF with standardized results
                     zf.writestr(f"Forensic_Report_{case_id}.pdf", create_pdf_report(results, case_notes=case_notes))
                     status.update(label="COMPLETE", state="complete")
             st.session_state["analysis_results"] = results
