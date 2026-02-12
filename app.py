@@ -14,19 +14,19 @@ IST = pytz.timezone('Asia/Kolkata')
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# --- UI BRANDING (DARK THEME) ---
+# --- DARK THEME UI ---
 st.markdown("""
 <style>
     .stApp { background-color: #0a0b0d; color: #00f2ff; font-family: 'Courier New', monospace; }
     section[data-testid="stSidebar"] { background-color: #0f1116 !important; border-right: 1px solid #00f2ff; }
-    .stButton>button { background-color: transparent; color: #00f2ff; border: 1px solid #00f2ff; width: 100%; border-radius: 0px; }
+    .stButton>button { background-color: transparent; color: #00f2ff; border: 1px solid #00f2ff; width: 100%; border-radius: 2px; }
     .stButton>button:hover { background-color: #00f2ff; color: #000; }
 </style>
 """, unsafe_allow_html=True)
 
 # --- AUTHENTICATION ---
 if not st.session_state.logged_in:
-    st.markdown("<h1 style='text-align:center;'>🛰️ ForensiX Authorization</h1>", unsafe_allow_html=True)
+    st.markdown("<h1 style='text-align:center; color:#00f2ff;'>🛰️ ForensiX Authorization</h1>", unsafe_allow_html=True)
     _, col, _ = st.columns([1, 1.5, 1])
     with col:
         u = st.text_input("AGENT ID")
@@ -36,13 +36,13 @@ if not st.session_state.logged_in:
                 st.session_state.logged_in = True
                 st.rerun()
             else:
-                st.error("Access Denied")
+                st.error("Invalid Credentials")
 else:
-    # --- HEADER SECTION ---
+    # --- DASHBOARD HEADER ---
     c1, c2 = st.columns([3, 1])
     with c1: 
         st.markdown('<h2 style="color:#00f2ff; margin:0;">🛰️ Forensic Investigation Dashboard</h2>', unsafe_allow_html=True)
-        st.caption("Nagpur Division | Advanced Image Forgery Analysis")
+        st.caption("G H Raisoni University | Nagpur Division Forensic Unit")
     with c2:
         now = datetime.now(IST).strftime('%I:%M:%S %p')
         st.markdown(f"<p style='text-align:right; font-size:18px;'>🕒 {now}</p>", unsafe_allow_html=True)
@@ -62,27 +62,27 @@ else:
             st.session_state.logged_in = False
             st.rerun()
 
-    # --- MODEL LOADING ---
     @st.cache_resource
     def load_engine():
         return load_model('forgery_detector.h5', compile=False) if os.path.exists('forgery_detector.h5') else None
     
     model = load_engine()
 
-    # --- ANALYSIS LOOP ---
-    files = st.file_uploader("UPLOAD EXHIBIT EVIDENCE", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+    # --- MAIN ANALYSIS LOOP ---
+    files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
 
     if files:
         for f in files:
-            st.markdown(f"**FILE IDENTIFIED: `{f.name}`**")
+            st.markdown(f"**EXHIBIT IDENTIFIED: `{f.name}`**")
             
-            # Reset pointer and generate ELA
+            # 1. Reset pointer and generate ELA
             f.seek(0)
             ela_heatmap = convert_to_ela_image(f)
             
+            # 2. Side-by-Side Display
             col_a, col_b = st.columns(2)
             with col_a:
-                f.seek(0) # Reset before every st.image call
+                f.seek(0) # Reset before display
                 st.image(f, caption="SOURCE EVIDENCE", use_container_width=True)
             with col_b:
                 st.image(ela_heatmap, caption="ELA DIFFERENCE MAP", use_container_width=True)
@@ -96,6 +96,7 @@ else:
                     f.seek(0)
                     b.write(f.read())
                 
+                # Pre-processing (128x128 Matrix Fix)
                 img_data = prepare_image_for_cnn(t_path)
                 tensor = np.expand_dims(img_data, axis=0)
                 pred = model.predict(tensor, verbose=0)[0][0]
@@ -104,6 +105,7 @@ else:
                 results.append({
                     "EXHIBIT": f.name, 
                     "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN",
-                    "SCORE": f"{pred:.4f}"
+                    "CONFIDENCE": f"{max(pred, 1-pred)*100:.2f}%"
                 })
+            st.markdown("### 📊 FINAL DETERMINATION REPORT")
             st.table(pd.DataFrame(results))
