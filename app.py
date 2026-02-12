@@ -42,7 +42,7 @@ else:
     c1, c2 = st.columns([3, 1])
     with c1: 
         st.markdown('<h2 style="color:#00f2ff; margin:0;">🛰️ Forensic Investigation Dashboard</h2>', unsafe_allow_html=True)
-        st.caption("G H Raisoni University | Nagpur Division Forensic Unit")
+        st.caption("Nagpur Division Forensic Unit | G H Raisoni University")
     with c2:
         now = datetime.now(IST).strftime('%I:%M:%S %p')
         st.markdown(f"<p style='text-align:right; font-size:18px;'>🕒 {now}</p>", unsafe_allow_html=True)
@@ -54,10 +54,7 @@ else:
             <h3 style="margin:0; color: #00f2ff;">⚡ SANSKAR</h3>
             <p style="margin:0; font-size: 12px;">📍 NAGPUR_MS_IN</p>
         </div>""", unsafe_allow_html=True)
-        
         st.markdown("---")
-        case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
-        
         if st.button("🔴 EXIT SESSION"):
             st.session_state.logged_in = False
             st.rerun()
@@ -69,23 +66,24 @@ else:
     model = load_engine()
 
     # --- MAIN ANALYSIS LOOP ---
-    files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
+    files = st.file_uploader("UPLOAD EVIDENCE EXHIBITS", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
 
     if files:
         for f in files:
             st.markdown(f"**EXHIBIT IDENTIFIED: `{f.name}`**")
             
-            # 1. Reset pointer and generate ELA
-            f.seek(0)
+            # STEP 1: Generate ELA Heatmap first
             ela_heatmap = convert_to_ela_image(f)
             
-            # 2. Side-by-Side Display
+            # STEP 2: Display Side-by-Side
             col_a, col_b = st.columns(2)
             with col_a:
-                f.seek(0) # Reset before display
-                st.image(f, caption="SOURCE EVIDENCE", use_container_width=True)
+                # STEP 3: Rewind the pointer so the display can show the original
+                f.seek(0) 
+                st.image(f, caption="SOURCE EVIDENCE (Original)", use_container_width=True)
             with col_b:
-                st.image(ela_heatmap, caption="ELA DIFFERENCE MAP", use_container_width=True)
+                # Display the pre-generated ELA image
+                st.image(ela_heatmap, caption="ELA ANALYSIS (Heatmap)", use_container_width=True)
 
         st.markdown("---")
         if st.button("INITIATE DEEP SCAN (CNN)") and model:
@@ -96,7 +94,7 @@ else:
                     f.seek(0)
                     b.write(f.read())
                 
-                # Pre-processing (128x128 Matrix Fix)
+                # Pre-processing (128x128 matrix sync)
                 img_data = prepare_image_for_cnn(t_path)
                 tensor = np.expand_dims(img_data, axis=0)
                 pred = model.predict(tensor, verbose=0)[0][0]
