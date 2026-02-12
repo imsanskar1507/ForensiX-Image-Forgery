@@ -60,15 +60,10 @@ else:
     @st.cache_resource
     def get_model():
         model_path = 'forgery_detector.h5'
-        # Check if file exists before trying to load it
-        if not os.path.exists(model_path):
-            st.error(f"❌ OSError: File '{model_path}' not found in the repository root.")
-            return None
+        if not os.path.exists(model_path): return None
         try:
             return load_model(model_path, compile=False)
-        except Exception as e:
-            st.error(f"❌ Error loading model: {e}. If the file is >25MB, ensure you used Git LFS.")
-            return None
+        except: return None
     
     model = get_model()
 
@@ -76,8 +71,14 @@ else:
         st.markdown(f"**⚡ OPERATIVE: {st.session_state['user'].upper()}**")
         st.markdown(f"**📍 NAGPUR_MS_IN**")
         
-        # Placeholder for the clock to prevent StreamlitAPIException
-        clock_spot = st.empty()
+        # --- FIXED CLOCK FRAGMENT ---
+        @st.fragment(run_every="1s")
+        def sidebar_clock():
+            # Placing the display logic INSIDE the fragment prevents the StreamlitAPIException
+            now = datetime.now(IST)
+            st.markdown(f"**🕒 {now.strftime('%I:%M:%S %p')}**")
+        
+        sidebar_clock()
         
         if st.button("🔴 EXIT"): 
             st.session_state["logged_in"] = False
@@ -116,11 +117,3 @@ else:
             
             st.session_state["analysis_results"] = results
             st.table(pd.DataFrame(results))
-
-    # Fragment updates only the specific placeholder
-    @st.fragment(run_every="1s")
-    def sync_clock(placeholder):
-        now = datetime.now(IST)
-        placeholder.markdown(f"**🕒 {now.strftime('%I:%M:%S %p')}**")
-    
-    sync_clock(clock_spot)
