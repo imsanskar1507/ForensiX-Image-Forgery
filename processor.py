@@ -29,6 +29,6 @@ def convert_to_ela_image(image_file, quality=90):
     extrema = ela_image.getextrema()
     max_diff = max([ex[1] for ex in extrema]) or 1
     
-    # FIX: Scale must be an integer
+    # FIX: Scale must be an integer to avoid TypeError in PIL
     scale = int(255.0 / max_diff)
     return Image.blend(ela_image, Image.new("RGB", ela_image.size, (0,0,0)), 1 - scale/255.0)
