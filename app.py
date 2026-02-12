@@ -14,7 +14,7 @@ IST = pytz.timezone('Asia/Kolkata')
 if "logged_in" not in st.session_state:
     st.session_state.logged_in = False
 
-# --- DARK THEME UI ---
+# --- UI BRANDING ---
 st.markdown("""
 <style>
     .stApp { background-color: #0a0b0d; color: #00f2ff; font-family: 'Courier New', monospace; }
@@ -47,17 +47,15 @@ else:
         now = datetime.now(IST).strftime('%I:%M:%S %p')
         st.markdown(f"<p style='text-align:right; font-size:18px;'>🕒 {now}</p>", unsafe_allow_html=True)
 
-    # --- OPERATIVE SIDEBAR ---
+    # --- SIDEBAR ---
     with st.sidebar:
         st.markdown(f"""<div style="border: 1px solid #00f2ff; padding: 15px; border-radius: 5px; background: rgba(0, 242, 255, 0.05);">
             <p style="margin:0; font-size: 10px; opacity: 0.6;">OPERATIVE STATUS</p>
             <h3 style="margin:0; color: #00f2ff;">⚡ SANSKAR</h3>
             <p style="margin:0; font-size: 12px;">📍 NAGPUR_MS_IN</p>
         </div>""", unsafe_allow_html=True)
-        
         st.markdown("---")
         case_id = st.text_input("CASE ID", value="REF-ALPHA-01")
-        
         if st.button("🔴 EXIT SESSION"):
             st.session_state.logged_in = False
             st.rerun()
@@ -68,43 +66,50 @@ else:
     
     model = load_engine()
 
-    # --- MAIN ANALYSIS LOOP ---
     files = st.file_uploader("UPLOAD EVIDENCE", type=["jpg", "png", "jpeg"], accept_multiple_files=True)
 
     if files:
         for f in files:
-            st.markdown(f"**EXHIBIT IDENTIFIED: `{f.name}`**")
-            
-            # STEP 1: Generate Heatmap first to ensure buffer is used correctly
+            st.markdown(f"**EXHIBIT: `{f.name}`**")
             ela_heatmap = convert_to_ela_image(f)
             
-            # STEP 2: Side-by-Side Display
             col_a, col_b = st.columns(2)
             with col_a:
-                f.seek(0) # Reset before every display call
+                f.seek(0)
                 st.image(f, caption="SOURCE EVIDENCE", use_container_width=True)
             with col_b:
                 st.image(ela_heatmap, caption="ELA DIFFERENCE MAP", use_container_width=True)
 
         st.markdown("---")
         if st.button("INITIATE DEEP SCAN (CNN)") and model:
-            results = []
+            results_data = []
             for f in files:
                 t_path = f"temp_{f.name}"
                 with open(t_path, "wb") as b:
                     f.seek(0)
                     b.write(f.read())
                 
-                # Pre-processing (128x128 Matrix Fix)
                 img_data = prepare_image_for_cnn(t_path)
                 tensor = np.expand_dims(img_data, axis=0)
                 pred = model.predict(tensor, verbose=0)[0][0]
                 os.remove(t_path)
                 
-                results.append({
+                results_data.append({
                     "EXHIBIT": f.name, 
                     "VERDICT": "🚩 FORGERY" if pred > 0.5 else "🏳️ CLEAN",
-                    "CONFIDENCE": f"{max(pred, 1-pred)*100:.2f}%"
+                    "CONFIDENCE": f"{max(pred, 1-pred)*100:.2f}%",
+                    "TIMESTAMP": datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')
                 })
+            
+            df = pd.DataFrame(results_data)
             st.markdown("### 📊 FINAL DETERMINATION REPORT")
-            st.table(pd.DataFrame(results))
+            st.table(df)
+
+            # DOWNLOAD BUTTON
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                label="📥 DOWNLOAD FORENSIC REPORT (CSV)",
+                data=csv,
+                file_name=f"ForensiX_Report_{case_id}.csv",
+                mime='text/csv',
+            )
