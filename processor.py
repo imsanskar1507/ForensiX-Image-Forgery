@@ -1,17 +1,26 @@
 import cv2
 import numpy as np
+import os
 from PIL import Image, ImageChops
 
 def prepare_image_for_cnn(image_path):
-    """Strictly enforces 224x224 RGB shape for the CNN."""
+    """Strictly enforces 224x224 RGB input for the CNN."""
     img = cv2.imread(image_path)
+    if img is None:
+        return np.zeros((224, 224, 3), dtype=np.float32)
+    
+    # Convert BGR to RGB
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    img = cv2.resize(img, (224, 224))
-    # Normalize to [0, 1] as per research training
-    return img.astype('float32') / 255.0
+    
+    # HARD RESIZE: Enforce 224x224
+    img = cv2.resize(img, (224, 224), interpolation=cv2.INTER_AREA)
+    
+    # Normalize pixel values
+    img = img.astype('float32') / 255.0
+    return img
 
 def convert_to_ela_image(image_file, quality=90):
-    """ELA logic with integer scale fix for Pillow."""
+    """ELA logic with integer casting fix for Pillow."""
     original = Image.open(image_file).convert('RGB')
     temp_p = 'temp_ela.jpg'
     original.save(temp_p, 'JPEG', quality=quality)
@@ -19,6 +28,7 @@ def convert_to_ela_image(image_file, quality=90):
     ela_image = ImageChops.difference(original, temporary)
     extrema = ela_image.getextrema()
     max_diff = max([ex[1] for ex in extrema]) or 1
-    # Scale MUST be integer
+    
+    # FIX: Scale must be an integer
     scale = int(255.0 / max_diff)
     return Image.blend(ela_image, Image.new("RGB", ela_image.size, (0,0,0)), 1 - scale/255.0)
