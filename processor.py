@@ -1,38 +1,30 @@
+import cv2
 import numpy as np
-from PIL import Image, ImageChops
 import os
-
-def convert_to_ela_image(image_file, quality=90):
-    """
-    Performs Error Level Analysis (ELA) to identify compression inconsistencies[cite: 121].
-    """
-    image = Image.open(image_file).convert('RGB')
-    temp_filename = 'temp_ela.jpg'
-    
-    # Resave at known quality to detect mathematical anomalies [cite: 121]
-    image.save(temp_filename, 'JPEG', quality=quality)
-    temp_image = Image.open(temp_filename)
-    
-    # Calculate pixel difference [cite: 121]
-    ela_image = ImageChops.difference(image, temp_image)
-    
-    extrema = ela_image.getextrema()
-    max_diff = max([ex[1] for ex in extrema])
-    if max_diff == 0:
-        max_diff = 1
-    scale = 255.0 / max_diff
-    
-    return ImageChops.constant(ela_image, scale)
+from PIL import Image, ImageChops
 
 def prepare_image_for_cnn(image_path):
-    """
-    Standardizes image to 224x224 RGB and normalizes pixels for the 20-layer CNN[cite: 115, 116].
-    """
-    image = Image.open(image_path).convert('RGB')
-    # Resizing to exact research specifications [cite: 115]
-    image = image.resize((224, 224)) 
-    
-    # Normalizing pixel values to 0-1 range to prevent saturated verdicts 
-    image_array = np.array(image).astype('float32') / 255.0
-    
-    return image_array
+    """Enforces 128x128 resolution for the 25,088 node requirement."""
+    img = cv2.imread(image_path)
+    if img is None:
+        return np.zeros((128, 128, 3), dtype=np.float32)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    # Forced resize to prevent ValueError during model.predict
+    img = cv2.resize(img, (128, 128), interpolation=cv2.INTER_AREA)
+    return img.astype('float32') / 255.0
+
+def convert_to_ela_image(image_file, quality=90):
+    """Generates a visible ELA Heatmap by amplifying pixel differences."""
+    image_file.seek(0)
+    original = Image.open(image_file).convert('RGB')
+    temp_p = 'temp_ela_work.jpg'
+    original.save(temp_p, 'JPEG', quality=quality)
+    temporary = Image.open(temp_p)
+    ela_image = ImageChops.difference(original, temporary)
+    extrema = ela_image.getextrema()
+    max_diff = max([ex[1] for ex in extrema]) or 1
+    scale = 255.0 / max_diff
+    result = Image.blend(ela_image, Image.new("RGB", ela_image.size, (0,0,0)), 1 - scale/255.0)
+    if os.path.exists(temp_p):
+        os.remove(temp_p)
+    return result
